@@ -43,6 +43,7 @@ extern char *vsbl_file_name;
 extern char *ovmf_file_name;
 extern char *kernel_file_name;
 extern char *elf_file_name;
+extern char *rit_file_name;
 extern char *vmname;
 extern bool stdio_in_use;
 extern char *mac_seed;

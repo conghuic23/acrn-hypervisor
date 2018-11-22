@@ -284,6 +284,27 @@ acrn_create_e820_table(struct vmctx *ctx, struct e820_entry *e820)
 int
 acrn_sw_load(struct vmctx *ctx)
 {
+	uint32_t count = 0;
+
+	if (rit_file_name)
+		count++;
+	if (vsbl_file_name)
+		count++;
+	if (kernel_file_name)
+		count++;
+	if (elf_file_name)
+		count++;
+	if (ovmf_file_name)
+		count++;
+
+	if (count == 0) {
+		printf("SW_LOAD: No boot image specified!!\r\n");
+		return -1;
+	} else if (count != 1) {
+		printf("SW_LOAD: Please specifiy only one boot image!!\r\n");
+		return -1;
+	}
+
 	if (vsbl_file_name)
 		return acrn_sw_load_vsbl(ctx);
 	else if (ovmf_file_name)
@@ -292,6 +313,8 @@ acrn_sw_load(struct vmctx *ctx)
 		return acrn_sw_load_bzimage(ctx);
 	else if (elf_file_name)
 		return acrn_sw_load_elf(ctx);
+	else if (rit_file_name)
+		return acrn_sw_load_rit(ctx);
 	else
 		return -1;
 }

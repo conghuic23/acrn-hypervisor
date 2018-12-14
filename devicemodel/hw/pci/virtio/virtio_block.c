@@ -114,7 +114,7 @@ struct virtio_blk_hdr {
 /*
  * Debug printf
  */
-static int virtio_blk_debug;
+static int virtio_blk_debug = 1;
 #define DPRINTF(params) do { if (virtio_blk_debug) printf params; } while (0)
 #define WPRINTF(params) (printf params)
 

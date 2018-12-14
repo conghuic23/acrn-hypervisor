@@ -67,7 +67,7 @@
 /*
  * Debug printf
  */
-static int block_if_debug;
+static int block_if_debug = 1;
 #define DPRINTF(params) do { if (block_if_debug) printf params; } while (0)
 #define WPRINTF(params) (printf params)
 

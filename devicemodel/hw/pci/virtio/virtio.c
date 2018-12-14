@@ -566,6 +566,7 @@ vq_endchains(struct virtio_vq_info *vq, int used_all_avail)
 		intr = new_idx != old_idx &&
 		    !(vq->avail->flags & ACRN_VRING_AVAIL_F_NO_INTERRUPT);
 	}
+	fprintf(stderr, "%s:%d intr = %d\n", __func__, __LINE__, intr);
 	if (intr)
 		vq_interrupt(base, vq);
 }
@@ -782,6 +783,8 @@ virtio_pci_legacy_write(struct vmctx *ctx, int vcpu, struct pci_vdev *dev,
 	uint32_t newoff;
 	int error;
 
+	fprintf(stderr, "%s:%d vcpu=%d baridx=%d, offset=%016lx, size=%d, value=%016lx\n", __func__, __LINE__,
+			vcpu, baridx, offset, size, value);
 	/* XXX probably should do something better than just assert() */
 	assert(baridx == base->legacy_pio_bar_idx);
 
@@ -791,8 +794,10 @@ virtio_pci_legacy_write(struct vmctx *ctx, int vcpu, struct pci_vdev *dev,
 	vops = base->vops;
 	name = vops->name;
 
-	if (size != 1 && size != 2 && size != 4)
+	if (size != 1 && size != 2 && size != 4) {
+		fprintf(stderr, "%s:%d size(%d) is invalid! \n", __func__, __LINE__, size);
 		goto bad;
+	}
 
 	if (pci_msix_enabled(dev))
 		virtio_config_size = VIRTIO_CR_CFG1;
@@ -804,14 +809,20 @@ virtio_pci_legacy_write(struct vmctx *ctx, int vcpu, struct pci_vdev *dev,
 		 * Subtract off the standard size (including MSI-X
 		 * registers if enabled) and dispatch to underlying driver.
 		 */
+		//fprintf(stderr, "offset(0x%016lx) >= virtio_config_size(0x%0016lx)\n", offset, virtio_config_size);
+		fprintf(stderr, "offset>= virtio_config_size\n");
 		newoff = offset - virtio_config_size;
 		max = vops->cfgsize ? vops->cfgsize : 0x100000000;
-		if (newoff + size > max)
+		if (newoff + size > max) {
+			fprintf(stderr, "%s:%d newoff + size > max!\n", __func__, __LINE__);
 			goto bad;
+		}
 		error = (*vops->cfgwrite)(DEV_STRUCT(base), newoff,
 					  size, value);
-		if (!error)
+		if (!error) {
+			fprintf(stderr, "%s:%d\n", __func__, __LINE__);
 			goto done;
+		}
 	}
 
 bad:
@@ -837,17 +848,20 @@ bad:
 
 	switch (offset) {
 	case VIRTIO_CR_GUESTCAP:
+		fprintf(stderr, "%s:%d VIRTIO_CR_GUESTCAP\n", __func__, __LINE__);
 		base->negotiated_caps = value & base->device_caps;
 		if (vops->apply_features)
 			(*vops->apply_features)(DEV_STRUCT(base),
 			    base->negotiated_caps);
 		break;
 	case VIRTIO_CR_PFN:
+		fprintf(stderr, "%s:%d VIRTIO_CR_PFN\n", __func__, __LINE__);
 		if (base->curq >= vops->nvq)
 			goto bad_qindex;
 		virtio_vq_init(base, value);
 		break;
 	case VIRTIO_CR_QSEL:
+		fprintf(stderr, "%s:%d VIRTIO_CR_QSEL\n", __func__, __LINE__);
 		/*
 		 * Note that the guest is allowed to select an
 		 * invalid queue; we just need to return a QNUM
@@ -856,6 +870,7 @@ bad:
 		base->curq = value;
 		break;
 	case VIRTIO_CR_QNOTIFY:
+		fprintf(stderr, "%s:%d VIRTIO_CR_QNOTIFY\n", __func__, __LINE__);
 		if (value >= vops->nvq) {
 			fprintf(stderr, "%s: queue %d notify out of range\r\n",
 				name, (int)value);
@@ -872,6 +887,7 @@ bad:
 				name, (int)value);
 		break;
 	case VIRTIO_CR_STATUS:
+		fprintf(stderr, "%s:%d VIRTIO_CR_STATUS\n", __func__, __LINE__);
 		base->status = value;
 		if (vops->set_status)
 			(*vops->set_status)(DEV_STRUCT(base), value);
@@ -879,9 +895,11 @@ bad:
 			(*vops->reset)(DEV_STRUCT(base));
 		break;
 	case VIRTIO_CR_CFGVEC:
+		fprintf(stderr, "%s:%d VIRTIO_CR_CFGVEC\n", __func__, __LINE__);
 		base->msix_cfg_idx = value;
 		break;
 	case VIRTIO_CR_QVEC:
+		fprintf(stderr, "%s:%d VIRTIO_CR_QVEC\n", __func__, __LINE__);
 		if (base->curq >= vops->nvq)
 			goto bad_qindex;
 		vq = &base->queues[base->curq];
@@ -1727,12 +1745,14 @@ virtio_pci_write(struct vmctx *ctx, int vcpu, struct pci_vdev *dev,
 	if (base->flags & VIRTIO_USE_MSIX) {
 		if (baridx == pci_msix_table_bar(dev) ||
 		    baridx == pci_msix_pba_bar(dev)) {
+		fprintf(stderr, "%s:%d write MSIX BAR!\n",__func__, __LINE__);
 			pci_emul_msix_twrite(dev, offset, size, value);
 			return;
 		}
 	}
 
 	if (baridx == base->legacy_pio_bar_idx) {
+		fprintf(stderr, "%s:%d write LEGACY BAR!\n",__func__, __LINE__);
 		virtio_pci_legacy_write(ctx, vcpu, dev, baridx,
 			offset, size, value);
 		return;

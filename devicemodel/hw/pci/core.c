@@ -266,9 +266,12 @@ pci_emul_msix_twrite(struct pci_vdev *dev, uint64_t offset, int size,
 	int tab_index;
 	char *dest;
 
+	fprintf(stderr, "%s:%d offset=0x%016lx, value=0x%016lx, size=%d!\n", __func__, __LINE__, offset, value, size);
 	/* support only 4 or 8 byte writes */
-	if (size != 4 && size != 8)
+	if (size != 4 && size != 8) {
+		fprintf(stderr, "%s:%d msix bar write failed!\n", __func__, __LINE__);
 		return -1;
+	}
 
 	/*
 	 * Return if table index is beyond what device supports
@@ -487,6 +490,7 @@ modify_bar_registration(struct pci_vdev *dev, int idx, int registration)
 	int error;
 	struct inout_port iop;
 	struct mem_range mr;
+	fprintf(stderr, "%s:%d idx=%d, registration=%d -->\n", __func__, __LINE__, idx, registration);
 
 	switch (dev->bar[idx].type) {
 	case PCIBAR_IO:
@@ -495,12 +499,15 @@ modify_bar_registration(struct pci_vdev *dev, int idx, int registration)
 		iop.port = dev->bar[idx].addr;
 		iop.size = dev->bar[idx].size;
 		if (registration) {
+		fprintf(stderr, "%s:%d \n", __func__, __LINE__);
 			iop.flags = IOPORT_F_INOUT;
 			iop.handler = pci_emul_io_handler;
 			iop.arg = dev;
 			error = register_inout(&iop);
-		} else
+		} else {
 			error = unregister_inout(&iop);
+		fprintf(stderr, "%s:%d \n", __func__, __LINE__);
+		}
 		break;
 	case PCIBAR_MEM32:
 	case PCIBAR_MEM64:
@@ -514,25 +521,31 @@ modify_bar_registration(struct pci_vdev *dev, int idx, int registration)
 			mr.arg1 = dev;
 			mr.arg2 = idx;
 			error = register_mem(&mr);
-		} else
+		fprintf(stderr, "%s:%d \n", __func__, __LINE__);
+		} else {
 			error = unregister_mem(&mr);
+		fprintf(stderr, "%s:%d \n", __func__, __LINE__);
+		}
 		break;
 	default:
 		error = EINVAL;
 		break;
 	}
 	assert(error == 0);
+	fprintf(stderr, "%s:%d <-- \n", __func__, __LINE__);
 }
 
 static void
 unregister_bar(struct pci_vdev *dev, int idx)
 {
+	fprintf(stderr, "%s:%d\n", __func__, __LINE__);
 	modify_bar_registration(dev, idx, 0);
 }
 
 static void
 register_bar(struct pci_vdev *dev, int idx)
 {
+	fprintf(stderr, "%s:%d\n", __func__, __LINE__);
 	modify_bar_registration(dev, idx, 1);
 }
 
@@ -543,6 +556,7 @@ enable_bar(struct pci_vdev *dev, int idx)
 	struct inout_port iop;
 	struct mem_range mr;
 
+	fprintf(stderr, "%s:%d\n", __func__, __LINE__);
 	switch (dev->bar[idx].type) {
 	case PCIBAR_IO:
 		bzero(&iop, sizeof(struct inout_port));
@@ -573,6 +587,7 @@ disable_bar(struct pci_vdev *dev, int idx)
 	struct inout_port iop;
 	struct mem_range mr;
 
+	fprintf(stderr, "%s:%d\n", __func__, __LINE__);
 	switch (dev->bar[idx].type) {
 	case PCIBAR_IO:
 		bzero(&iop, sizeof(struct inout_port));
@@ -631,14 +646,20 @@ update_bar_address(struct  pci_vdev *dev, uint64_t addr, int idx, int type)
 {
 	int decode;
 	uint64_t orig_addr;
+	fprintf(stderr, "%s:%d.\r\n", __func__, __LINE__);
 
 	if (dev->bar[idx].type == PCIBAR_IO)
 		decode = porten(dev);
 	else
 		decode = memen(dev);
 
+	fprintf(stderr, "decode = %d, idx = %d, type = %d.\r\n",decode, idx, type);
 	if (decode)
 		unregister_bar(dev, idx);
+
+	fprintf(stderr, "%s:%d unregister_bar done.\r\n",__func__, __LINE__);
+
+	decode = 1;
 
 	switch (type) {
 	case PCIBAR_IO:
@@ -668,6 +689,7 @@ update_bar_address(struct  pci_vdev *dev, uint64_t addr, int idx, int type)
 
 	if (decode)
 		register_bar(dev, idx);
+	fprintf(stderr, "%s:%d register_bar done.\r\n",__func__, __LINE__);
 }
 
 int
@@ -1190,6 +1212,8 @@ static int
 pci_emul_fallback_handler(struct vmctx *ctx, int vcpu, int dir, uint64_t addr,
 			  int size, uint64_t *val, void *arg1, long arg2)
 {
+	fprintf(stderr, "%s:%d dir=%s addr=0x%016lx, size=%d, val=0x%016lx\n",
+			__func__, __LINE__, dir==MEM_F_READ?"in":"out", addr, size, dir==MEM_F_READ?0xffffffffffffffff:*val);
 	/*
 	 * Ignore writes; return 0xff's for reads. The mem read code
 	 * will take care of truncating to the correct size.
@@ -1958,6 +1982,7 @@ pci_emul_cmdsts_write(struct pci_vdev *dev, int coff, uint32_t new, int bytes)
 	int i, rshift;
 	uint32_t cmd, cmd2, changed, old, readonly;
 
+	fprintf(stderr, "%s:%d\n", __func__, __LINE__);
 	cmd = pci_get_cfgdata16(dev, PCIR_COMMAND);	/* stash old value */
 
 	/*
@@ -1990,7 +2015,8 @@ pci_emul_cmdsts_write(struct pci_vdev *dev, int coff, uint32_t new, int bytes)
 		case PCIBAR_IO:
 		/* I/O address space decoding changed? */
 			if (changed & PCIM_CMD_PORTEN) {
-				if (porten(dev))
+				if (new & PCIM_CMD_PORTEN)
+				//if (porten(dev))
 					enable_bar(dev, i);
 				else
 					disable_bar(dev, i);
@@ -2000,7 +2026,8 @@ pci_emul_cmdsts_write(struct pci_vdev *dev, int coff, uint32_t new, int bytes)
 		case PCIBAR_MEM64:
 		/* MMIO address space decoding changed? */
 			if (changed & PCIM_CMD_MEMEN) {
-				if (memen(dev))
+				if (new & PCIM_CMD_MEMEN)
+				//if (memen(dev))
 					enable_bar(dev, i);
 				else
 					disable_bar(dev, i);

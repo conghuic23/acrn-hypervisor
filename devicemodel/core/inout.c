@@ -52,6 +52,8 @@ static int
 default_inout(struct vmctx *ctx, int vcpu, int in, int port, int bytes,
 	      uint32_t *eax, void *arg)
 {
+	fprintf(stderr,"%s:%d vpu=%d dir=%s port=%d bytes=%d 0x%x\n", __func__, __LINE__,
+				vcpu, in?"in":"out", port, bytes, in?0xFFFFFFFF:*eax);
 	if (in) {
 		switch (bytes) {
 		case 4:
@@ -74,6 +76,7 @@ register_default_iohandler(int start, int size)
 {
 	struct inout_port iop;
 
+	fprintf(stderr, "%s:%d start=%d, size=%d\n", __func__, __LINE__, start, size);
 	if (!VERIFY_IOPORT(start, size)) {
 		printf("invalid input: port:0x%x, size:%d", start, size);
 		return;
@@ -117,6 +120,7 @@ emulate_inout(struct vmctx *ctx, int *pvcpu, struct pio_request *pio_request)
 	}
 
 	if (inout_handlers[port].enabled == false) {
+		fprintf(stderr, "%s:%d port%d enabled==false!\n", __func__, __LINE__, port);
 		return -1;
 	}
 
@@ -153,6 +157,7 @@ disable_inout(struct inout_port *iop)
 {
 	int i;
 
+	fprintf(stderr, "%s:%d\n", __func__, __LINE__);
 	if (!VERIFY_IOPORT(iop->port, iop->size)) {
 		printf("invalid input: port:0x%x, size:%d",
 				iop->port, iop->size);
@@ -171,6 +176,7 @@ enable_inout(struct inout_port *iop)
 {
 	int i;
 
+	fprintf(stderr, "%s:%d\n", __func__, __LINE__);
 	if (!VERIFY_IOPORT(iop->port, iop->size)) {
 		printf("invalid input: port:0x%x, size:%d",
 				iop->port, iop->size);
@@ -189,6 +195,7 @@ register_inout(struct inout_port *iop)
 {
 	int i;
 
+	fprintf(stderr, "%s:%d iop->port=%d, iop->size=%d\n", __func__, __LINE__, iop->port, iop->size);
 	if (!VERIFY_IOPORT(iop->port, iop->size)) {
 		printf("invalid input: port:0x%x, size:%d",
 				iop->port, iop->size);
@@ -201,8 +208,10 @@ register_inout(struct inout_port *iop)
 	 */
 	if ((iop->flags & IOPORT_F_DEFAULT) == 0) {
 		for (i = iop->port; i < iop->port + iop->size; i++) {
-			if ((inout_handlers[i].flags & IOPORT_F_DEFAULT) == 0)
+			if ((inout_handlers[i].flags & IOPORT_F_DEFAULT) == 0) {
+	fprintf(stderr, "%s:%d return -1!\n", __func__, __LINE__);
 				return -1;
+				}
 		}
 	}
 

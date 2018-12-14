@@ -412,6 +412,7 @@ vm_lapic_msi(struct vmctx *ctx, uint64_t addr, uint64_t msg)
 	msi.msi_addr = addr;
 	msi.msi_data = msg;
 
+	fprintf(stderr, "%s:%d inject msi_addr:0x%016lx msi_data:0x%016lx\n", __func__, __LINE__, addr, msg);
 	return ioctl(ctx->fd, IC_INJECT_MSI, &msi);
 }
 

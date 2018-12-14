@@ -120,12 +120,14 @@ mmio_rb_dump(struct mmio_rb_tree *rbt)
 {
 	struct mmio_rb_range *np;
 
-	pthread_rwlock_rdlock(&mmio_rwlock);
+	fprintf(stderr, "%s:%d mmio_wrlock lock\n", __func__, __LINE__);
+	pthread_rwlock_wrlock(&mmio_rwlock);
 	RB_FOREACH(np, mmio_rb_tree, rbt) {
 		printf(" %lx:%lx, %s\n", np->mr_base, np->mr_end,
 		       np->mr_param.name);
 	}
 	pthread_rwlock_unlock(&mmio_rwlock);
+	fprintf(stderr, "%s:%d mmio_rwlock unlock\n", __func__, __LINE__);
 }
 #endif
 
@@ -163,13 +165,16 @@ emulate_mem(struct vmctx *ctx, struct mmio_request *mmio_req)
 	struct mmio_rb_range *entry = NULL;
 	int err;
 
+	fprintf(stderr, "%s:%d paddr=0x%016lx size=%d mmio_rdlock lock\n", __func__, __LINE__, paddr, size);
 	pthread_rwlock_rdlock(&mmio_rwlock);
 	/*
 	 * First check the per-VM cache
 	 */
+#if 0
 	if (mmio_hint && paddr >= mmio_hint->mr_base &&
 			paddr <= mmio_hint->mr_end)
 		entry = mmio_hint;
+#endif
 
 	if (entry == NULL) {
 		if (mmio_rb_lookup(&mmio_rb_root, paddr, &entry) == 0)
@@ -177,6 +182,7 @@ emulate_mem(struct vmctx *ctx, struct mmio_request *mmio_req)
 			mmio_hint = entry;
 		else if (mmio_rb_lookup(&mmio_rb_fallback, paddr, &entry)) {
 			pthread_rwlock_unlock(&mmio_rwlock);
+	fprintf(stderr, "%s:%d mmio_rwlock unlock\n", __func__, __LINE__);
 			return -ESRCH;
 		}
 	}
@@ -184,6 +190,9 @@ emulate_mem(struct vmctx *ctx, struct mmio_request *mmio_req)
 	assert(entry != NULL);
 
 	if (entry->enabled == false) {
+		fprintf(stderr, "%s:%d enabled == false!\n", __func__, __LINE__);
+		pthread_rwlock_unlock(&mmio_rwlock);
+	fprintf(stderr, "%s:%d mmio_rwlock unlock\n", __func__, __LINE__);
 		return -1;
 	}
 
@@ -195,6 +204,7 @@ emulate_mem(struct vmctx *ctx, struct mmio_request *mmio_req)
 				size, &entry->mr_param);
 
 	pthread_rwlock_unlock(&mmio_rwlock);
+	fprintf(stderr, "%s:%d mmio_rwlock unlock\n", __func__, __LINE__);
 
 	return err;
 }
@@ -207,6 +217,7 @@ register_mem_int(struct mmio_rb_tree *rbt, struct mem_range *memp)
 
 	err = 0;
 
+	fprintf(stderr, "%s:%d\n", __func__, __LINE__);
 	mrp = malloc(sizeof(struct mmio_rb_range));
 
 	if (mrp != NULL) {
@@ -214,10 +225,12 @@ register_mem_int(struct mmio_rb_tree *rbt, struct mem_range *memp)
 		mrp->mr_base = memp->base;
 		mrp->mr_end = memp->base + memp->size - 1;
 		mrp->enabled = true;
-		pthread_rwlock_wrlock(&mmio_rwlock);
+	//fprintf(stderr, "%s:%d mmio_rwlock lock\n", __func__, __LINE__);
+		//pthread_rwlock_wrlock(&mmio_rwlock);
 		if (mmio_rb_lookup(rbt, memp->base, &entry) != 0)
 			err = mmio_rb_add(rbt, mrp);
-		pthread_rwlock_unlock(&mmio_rwlock);
+		//pthread_rwlock_unlock(&mmio_rwlock);
+	//fprintf(stderr, "%s:%d mmio_rwlock unlock\n", __func__, __LINE__);
 		if (err)
 			free(mrp);
 	} else
@@ -232,6 +245,8 @@ disable_mem(struct mem_range *memp)
 	uint64_t paddr = memp->base;
 	struct mmio_rb_range *entry = NULL;
 
+	fprintf(stderr, "%s:%d\n", __func__, __LINE__);
+	fprintf(stderr, "%s:%d mmio_rdlock lock\n", __func__, __LINE__);
 	pthread_rwlock_rdlock(&mmio_rwlock);
 	/*
 	 * First check the per-VM cache
@@ -246,6 +261,7 @@ disable_mem(struct mem_range *memp)
 			mmio_hint = entry;
 		else if (mmio_rb_lookup(&mmio_rb_fallback, paddr, &entry)) {
 			pthread_rwlock_unlock(&mmio_rwlock);
+	fprintf(stderr, "%s:%d mmio_rwlock unlock\n", __func__, __LINE__);
 			return -ESRCH;
 		}
 	}
@@ -253,6 +269,7 @@ disable_mem(struct mem_range *memp)
 	assert(entry != NULL);
 	entry->enabled = false;
 	pthread_rwlock_unlock(&mmio_rwlock);
+	fprintf(stderr, "%s:%d mmio_rwlock unlock\n", __func__, __LINE__);
 
 	return 0;
 }
@@ -263,6 +280,8 @@ enable_mem(struct mem_range *memp)
 	uint64_t paddr = memp->base;
 	struct mmio_rb_range *entry = NULL;
 
+	fprintf(stderr, "%s:%d\n", __func__, __LINE__);
+	fprintf(stderr, "%s:%d mmio_rdlock lock\n", __func__, __LINE__);
 	pthread_rwlock_rdlock(&mmio_rwlock);
 	/*
 	 * First check the per-VM cache
@@ -277,6 +296,7 @@ enable_mem(struct mem_range *memp)
 			mmio_hint = entry;
 		else if (mmio_rb_lookup(&mmio_rb_fallback, paddr, &entry)) {
 			pthread_rwlock_unlock(&mmio_rwlock);
+	fprintf(stderr, "%s:%d mmio_rwlock unlock\n", __func__, __LINE__);
 			return -ESRCH;
 		}
 	}
@@ -284,6 +304,7 @@ enable_mem(struct mem_range *memp)
 	assert(entry != NULL);
 	entry->enabled = true;
 	pthread_rwlock_unlock(&mmio_rwlock);
+	fprintf(stderr, "%s:%d mmio_rwlock unlock\n", __func__, __LINE__);
 
 	return 0;
 }
@@ -291,12 +312,14 @@ enable_mem(struct mem_range *memp)
 int
 register_mem(struct mem_range *memp)
 {
+	fprintf(stderr, "%s:%d\n", __func__, __LINE__);
 	return register_mem_int(&mmio_rb_root, memp);
 }
 
 int
 register_mem_fallback(struct mem_range *memp)
 {
+	fprintf(stderr, "%s:%d\n", __func__, __LINE__);
 	return register_mem_int(&mmio_rb_fallback, memp);
 }
 
@@ -307,6 +330,8 @@ unregister_mem_fallback(struct mem_range *memp)
 	struct mmio_rb_range *entry = NULL;
 	int err;
 
+	fprintf(stderr, "%s:%d\n", __func__, __LINE__);
+	fprintf(stderr, "%s:%d mmio_rwlock lock\n", __func__, __LINE__);
 	pthread_rwlock_wrlock(&mmio_rwlock);
 	err = mmio_rb_lookup(&mmio_rb_fallback, memp->base, &entry);
 	if (err == 0) {
@@ -321,6 +346,7 @@ unregister_mem_fallback(struct mem_range *memp)
 			mmio_hint = NULL;
 	}
 	pthread_rwlock_unlock(&mmio_rwlock);
+	fprintf(stderr, "%s:%d mmio_rwlock unlock\n", __func__, __LINE__);
 
 	if (entry)
 		free(entry);
@@ -335,7 +361,9 @@ unregister_mem(struct mem_range *memp)
 	struct mmio_rb_range *entry = NULL;
 	int err;
 
-	pthread_rwlock_wrlock(&mmio_rwlock);
+	fprintf(stderr, "%s:%d \n", __func__, __LINE__);
+	//fprintf(stderr, "%s:%d mmio_rwlock lock\n", __func__, __LINE__);
+	//pthread_rwlock_wrlock(&mmio_rwlock);
 	err = mmio_rb_lookup(&mmio_rb_root, memp->base, &entry);
 	if (err == 0) {
 		mr = &entry->mr_param;
@@ -344,11 +372,13 @@ unregister_mem(struct mem_range *memp)
 		assert((mr->flags & MEM_F_IMMUTABLE) == 0);
 		RB_REMOVE(mmio_rb_tree, &mmio_rb_root, entry);
 
+	fprintf(stderr, "%s:%d \n", __func__, __LINE__);
 		/* flush Per-VM cache */
 		if (mmio_hint == entry)
 			mmio_hint = NULL;
 	}
-	pthread_rwlock_unlock(&mmio_rwlock);
+	//pthread_rwlock_unlock(&mmio_rwlock);
+	//fprintf(stderr, "%s:%d mmio_rwlock unlock\n", __func__, __LINE__);
 
 	if (entry)
 		free(entry);

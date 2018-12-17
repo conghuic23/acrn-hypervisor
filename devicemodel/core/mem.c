@@ -165,7 +165,7 @@ emulate_mem(struct vmctx *ctx, struct mmio_request *mmio_req)
 	struct mmio_rb_range *entry = NULL;
 	int err;
 
-	fprintf(stderr, "%s:%d paddr=0x%016lx size=%d mmio_rdlock lock\n", __func__, __LINE__, paddr, size);
+	//fprintf(stderr, "%s:%d paddr=0x%016lx size=%d mmio_rdlock lock\n", __func__, __LINE__, paddr, size);
 	pthread_rwlock_rdlock(&mmio_rwlock);
 	/*
 	 * First check the per-VM cache
@@ -182,7 +182,7 @@ emulate_mem(struct vmctx *ctx, struct mmio_request *mmio_req)
 			mmio_hint = entry;
 		else if (mmio_rb_lookup(&mmio_rb_fallback, paddr, &entry)) {
 			pthread_rwlock_unlock(&mmio_rwlock);
-	fprintf(stderr, "%s:%d mmio_rwlock unlock\n", __func__, __LINE__);
+	//fprintf(stderr, "%s:%d mmio_rwlock unlock\n", __func__, __LINE__);
 			return -ESRCH;
 		}
 	}
@@ -204,7 +204,7 @@ emulate_mem(struct vmctx *ctx, struct mmio_request *mmio_req)
 				size, &entry->mr_param);
 
 	pthread_rwlock_unlock(&mmio_rwlock);
-	fprintf(stderr, "%s:%d mmio_rwlock unlock\n", __func__, __LINE__);
+	//fprintf(stderr, "%s:%d mmio_rwlock unlock\n", __func__, __LINE__);
 
 	return err;
 }

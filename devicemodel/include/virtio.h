@@ -654,14 +654,14 @@ static inline void
 vq_interrupt(struct virtio_base *vb, struct virtio_vq_info *vq)
 {
 	if (pci_msix_enabled(vb->dev)) {
-		fprintf(stderr, "%s:%d generate msix\n", __func__, __LINE__);
+		//fprintf(stderr, "%s:%d generate msix\n", __func__, __LINE__);
 		pci_generate_msix(vb->dev, vq->msix_idx);
 	} else {
 		VIRTIO_BASE_LOCK(vb);
 		vb->isr |= VIRTIO_CR_ISR_QUEUES;
-		fprintf(stderr, "%s:%d generate msi\n", __func__, __LINE__);
+		//fprintf(stderr, "%s:%d generate msi\n", __func__, __LINE__);
 		pci_generate_msi(vb->dev, 0);
-		fprintf(stderr, "%s:%d assert legacy irq\n", __func__, __LINE__);
+		//fprintf(stderr, "%s:%d assert legacy irq\n", __func__, __LINE__);
 		pci_lintr_assert(vb->dev);
 		VIRTIO_BASE_UNLOCK(vb);
 	}

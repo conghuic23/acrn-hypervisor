@@ -1073,3 +1073,10 @@ blockif_flush_all(struct blockif_ctxt *bc)
 		err = errno;
 	return err;
 }
+
+int
+blockif_getfd(struct blockif_ctxt *bc)
+{
+	assert(bc->magic == BLOCKIF_SIG);
+	return bc->fd;
+}

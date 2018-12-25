@@ -31,6 +31,8 @@ static int vhost_debug;
 	do { if (vhost_debug) printf(LOG_TAG fmt, ##args); } while (0)
 #define WPRINTF(fmt, args...) printf(LOG_TAG fmt, ##args)
 
+#define VHOST_BLK_SET_BACKEND _IOW(VHOST_VIRTIO, 0x50, struct vhost_vring_file)
+
 static inline
 int vhost_kernel_ioctl(struct vhost_dev *vdev,
 		       unsigned long int request,
@@ -159,6 +161,13 @@ vhost_kernel_net_set_backend(struct vhost_dev *vdev,
 			     struct vhost_vring_file *file)
 {
 	return vhost_kernel_ioctl(vdev, VHOST_NET_SET_BACKEND, file);
+}
+
+static int
+vhost_kernel_blk_set_backend(struct vhost_dev *vdev,
+			     struct vhost_vring_file *file)
+{
+	return vhost_kernel_ioctl(vdev, VHOST_BLK_SET_BACKEND, file);
 }
 
 static int
@@ -338,7 +347,7 @@ vhost_vq_start(struct vhost_dev *vdev, int idx)
 	struct vhost_vring_addr addr;
 	struct vhost_vring_file file;
 	int rc, q_idx;
-
+	printf("vhost_vq_start ############### 1");
 	/* sanity check */
 	if (!vdev->base || !vdev->base->queues || !vdev->base->vops ||
 		!vdev->vqs) {
@@ -346,6 +355,7 @@ vhost_vq_start(struct vhost_dev *vdev, int idx)
 		goto fail;
 	}
 
+	printf("vhost_vq_start ############### 2");
 	/*
 	 * vq_idx is introduced to support multi-queue feature of vhost net.
 	 * When multi-queue feature is enabled, every vhost_dev owns part of
@@ -361,6 +371,7 @@ vhost_vq_start(struct vhost_dev *vdev, int idx)
 			idx, vdev->vq_idx);
 		goto fail;
 	}
+	printf("vhost_vq_start ############### 3");
 	vqi = &vdev->base->queues[q_idx];
 	vq = &vdev->vqs[idx];
 
@@ -368,6 +379,7 @@ vhost_vq_start(struct vhost_dev *vdev, int idx)
 	vhost_eventfd_test_and_clear(vq->kick_fd);
 	vhost_eventfd_test_and_clear(vq->call_fd);
 
+	printf("vhost_vq_start ############### 4");
 	/* register ioeventfd & irqfd */
 	rc = vhost_vq_register_eventfd(vdev, idx, true);
 	if (rc < 0) {
@@ -375,6 +387,7 @@ vhost_vq_start(struct vhost_dev *vdev, int idx)
 		goto fail;
 	}
 
+	printf("vhost_vq_start ############### 5");
 	/* VHOST_SET_VRING_NUM */
 	ring.index = idx;
 	ring.num = vqi->qsize;
@@ -384,6 +397,7 @@ vhost_vq_start(struct vhost_dev *vdev, int idx)
 		goto fail_vring;
 	}
 
+	printf("vhost_vq_start ############### 6");
 	/* VHOST_SET_VRING_BASE */
 	ring.num = vqi->last_avail;
 	rc = vhost_kernel_set_vring_base(vdev, &ring);
@@ -393,6 +407,7 @@ vhost_vq_start(struct vhost_dev *vdev, int idx)
 		goto fail_vring;
 	}
 
+	printf("vhost_vq_start ############### 7");
 	/* VHOST_SET_VRING_ADDR */
 	addr.index = idx;
 	addr.desc_user_addr = (uintptr_t)vqi->desc;
@@ -406,6 +421,7 @@ vhost_vq_start(struct vhost_dev *vdev, int idx)
 		goto fail_vring;
 	}
 
+	printf("vhost_vq_start ############### 8");
 	/* VHOST_SET_VRING_CALL */
 	file.index = idx;
 	file.fd = vq->call_fd;
@@ -415,6 +431,7 @@ vhost_vq_start(struct vhost_dev *vdev, int idx)
 		goto fail_vring;
 	}
 
+	printf("vhost_vq_start ############### 9");
 	/* VHOST_SET_VRING_KICK */
 	file.index = idx;
 	file.fd = vq->kick_fd;
@@ -424,6 +441,7 @@ vhost_vq_start(struct vhost_dev *vdev, int idx)
 		goto fail_vring_kick;
 	}
 
+	printf("vhost_vq_start ############### 10");
 	return 0;
 
 fail_vring_kick:
@@ -574,7 +592,7 @@ vhost_dev_init(struct vhost_dev *vdev,
 {
 	uint64_t features;
 	int i, rc;
-
+	printf("vhost_dev_init ################### 1\n");
 	/* sanity check */
 	if (!base || !base->queues || !base->vops) {
 		WPRINTF("virtio_base is not initialized\n");
@@ -591,23 +609,28 @@ vhost_dev_init(struct vhost_dev *vdev,
 		goto fail;
 	}
 
+	printf("vhost_dev_init ################### 2\n");
 	vhost_kernel_init(vdev, base, fd, vq_idx, busyloop_timeout);
 
+	printf("vhost_dev_init ################### 3\n");
 	rc = vhost_kernel_get_features(vdev, &features);
 	if (rc < 0) {
 		WPRINTF("vhost_get_features failed\n");
 		goto fail;
 	}
 
+	printf("vhost_dev_init ################### 4\n");
 	for (i = 0; i < vdev->nvqs; i++) {
 		rc = vhost_vq_init(vdev, i);
 		if (rc < 0)
 			goto fail;
 	}
 
+	printf("vhost_dev_init ################### 5\n");
 	/* specific backend features to vhost */
 	vdev->vhost_ext_features = vhost_ext_features & features;
 
+	printf("vhost_dev_init ################### 6\n");
 	/* features supported by vhost */
 	vdev->vhost_features = vhost_features & features;
 
@@ -668,32 +691,38 @@ vhost_dev_start(struct vhost_dev *vdev)
 	uint64_t features;
 	int i, rc;
 
+	printf("vhost_dev_start ############ 1 \n");
 	if (vdev->started)
 		return 0;
 
+	printf("vhost_dev_start ############ 2 \n");
 	/* sanity check */
 	if (!vdev->base || !vdev->base->queues || !vdev->base->vops) {
 		WPRINTF("virtio_base is not initialized\n");
 		goto fail;
 	}
 
+	printf("vhost_dev_start ############ 3 \n");
 	if ((vdev->base->status & VIRTIO_CONFIG_S_DRIVER_OK) == 0) {
 		WPRINTF("status error 0x%x\n", vdev->base->status);
 		goto fail;
 	}
 
+	printf("vhost_dev_start ############ 4 \n");
 	/* only msix is supported now */
 	if (!pci_msix_enabled(vdev->base->dev)) {
 		WPRINTF("only msix is supported\n");
 		goto fail;
 	}
 
+	printf("vhost_dev_start ############ 5 \n");
 	rc = vhost_kernel_set_owner(vdev);
 	if (rc < 0) {
 		WPRINTF("vhost_set_owner failed\n");
 		goto fail;
 	}
 
+	printf("vhost_dev_start ############ 6 \n");
 	/* set vhost internal features */
 	features = (vdev->base->negotiated_caps & vdev->vhost_features) |
 		vdev->vhost_ext_features;
@@ -704,6 +733,7 @@ vhost_dev_start(struct vhost_dev *vdev)
 	}
 	DPRINTF("set_features: 0x%lx\n", features);
 
+	printf("vhost_dev_start ############ 7 \n");
 	/* set memory table */
 	rc = vhost_set_mem_table(vdev);
 	if (rc < 0) {
@@ -711,11 +741,13 @@ vhost_dev_start(struct vhost_dev *vdev)
 		goto fail;
 	}
 
+	printf("vhost_dev_start ############ 8 \n");
 	/* config busyloop timeout */
 	if (vdev->busyloop_timeout) {
 		state.num = vdev->busyloop_timeout;
 		for (i = 0; i < vdev->nvqs; i++) {
 			state.index = i;
+			printf("vhost_dev_start ############ 9 \n");
 			rc = vhost_kernel_set_vring_busyloop_timeout(vdev,
 				&state);
 			if (rc < 0) {
@@ -725,6 +757,7 @@ vhost_dev_start(struct vhost_dev *vdev)
 		}
 	}
 
+	printf("vhost_dev_start ############ 10 \n");
 	/* start vhost virtqueue */
 	for (i = 0; i < vdev->nvqs; i++) {
 		rc = vhost_vq_start(vdev, i);
@@ -732,6 +765,7 @@ vhost_dev_start(struct vhost_dev *vdev)
 			goto fail_vq;
 	}
 
+	printf("vhost_dev_start ############ 11 \n");
 	vdev->started = true;
 	return 0;
 
@@ -804,6 +838,32 @@ fail:
 	while (--i >= 0) {
 		file.index = i;
 		vhost_kernel_net_set_backend(vdev, &file);
+	}
+
+	return -1;
+}
+
+
+int
+vhost_blk_set_backend(struct vhost_dev *vdev, int backend_fd)
+{
+	struct vhost_vring_file file;
+	int rc, i;
+
+	file.fd = backend_fd;
+	for (i = 0; i < vdev->nvqs; i++) {
+		file.index = i;
+		rc = vhost_kernel_blk_set_backend(vdev, &file);
+		if (rc < 0)
+			goto fail;
+	}
+
+	return 0;
+fail:
+	file.fd = -1;
+	while (--i >= 0) {
+		file.index = i;
+		vhost_kernel_blk_set_backend(vdev, &file);
 	}
 
 	return -1;

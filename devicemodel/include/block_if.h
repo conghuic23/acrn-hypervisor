@@ -72,5 +72,6 @@ int	blockif_flush_all(struct blockif_ctxt *bc);
 int	blockif_max_discard_sectors(struct blockif_ctxt *bc);
 int	blockif_max_discard_seg(struct blockif_ctxt *bc);
 int	blockif_discard_sector_alignment(struct blockif_ctxt *bc);
+int	blockif_getfd(struct blockif_ctxt *bc);
 
 #endif /* _BLOCK_IF_H_ */

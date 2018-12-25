@@ -31,13 +31,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <assert.h>
 #include <pthread.h>
 #include <openssl/md5.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #include "dm.h"
 #include "pci_core.h"
 #include "virtio.h"
+#include "vhost.h"
 #include "block_if.h"
 
 #define VIRTIO_BLK_RINGSZ	64
@@ -138,6 +143,17 @@ struct virtio_blk_ioreq {
 };
 
 /*
+ * vhost device struct
+ */
+struct vhost_blk {
+	struct vhost_dev vdev;
+	struct vhost_vq vqs[1];
+	int fd;
+	bool vhost_started;
+};
+
+
+/*
  * Per-device struct
  */
 struct virtio_blk {
@@ -149,12 +165,19 @@ struct virtio_blk {
 	char ident[VIRTIO_BLK_BLK_ID_BYTES + 1];
 	struct virtio_blk_ioreq ios[VIRTIO_BLK_RINGSZ];
 	uint8_t original_wce;
+	struct vhost_blk *vhost_blk;
+	bool use_vhost;
 };
 
 static void virtio_blk_reset(void *);
 static void virtio_blk_notify(void *, struct virtio_vq_info *);
 static int virtio_blk_cfgread(void *, int, int, uint32_t *);
 static int virtio_blk_cfgwrite(void *, int, int, uint32_t);
+static struct vhost_blk *vhost_blk_init(struct virtio_base *base, int vhostfd, int vq_idx);
+static int vhost_blk_deinit(struct vhost_blk *vhost_blk);
+static int vhost_blk_start(struct vhost_blk *vhost_blk, int fd);
+static int vhost_blk_stop(struct vhost_blk *vhost_blk);
+static void virtio_blk_set_status(void *vdev, uint64_t status);
 
 static struct virtio_ops virtio_blk_ops = {
 	"virtio_blk",		/* our name */
@@ -165,7 +188,7 @@ static struct virtio_ops virtio_blk_ops = {
 	virtio_blk_cfgread,	/* read PCI config */
 	virtio_blk_cfgwrite,	/* write PCI config */
 	NULL,			/* apply negotiated features */
-	NULL,			/* called on guest set status */
+	virtio_blk_set_status,			/* called on guest set status */
 };
 
 static void
@@ -344,6 +367,30 @@ virtio_blk_get_caps(struct virtio_blk *blk, bool wb)
 	return caps;
 }
 
+static void
+virtio_blk_set_status(void *vdev, uint64_t status)
+{
+	struct virtio_blk *blk= vdev;
+	int rc;
+
+	if (!blk->vhost_blk)
+		return;
+
+	if (!blk->vhost_blk->vhost_started &&
+		(status & VIRTIO_CR_STATUS_DRIVER_OK)) {
+		rc = vhost_blk_start(blk->vhost_blk, blockif_getfd(blk->bc));
+		if (rc < 0) {
+			WPRINTF(("vhost_blk_start failed\n"));
+			return;
+		}
+	} else if (blk->vhost_blk->vhost_started &&
+		((status & VIRTIO_CR_STATUS_DRIVER_OK) == 0)) {
+		rc = vhost_blk_stop(blk->vhost_blk);
+		if (rc < 0)
+			WPRINTF(("vhost_net_stop failed\n"));
+	}
+}
+
 static int
 virtio_blk_init(struct vmctx *ctx, struct pci_vdev *dev, char *opts)
 {
@@ -355,6 +402,7 @@ virtio_blk_init(struct vmctx *ctx, struct pci_vdev *dev, char *opts)
 	off_t size;
 	int i, sectsz, sts, sto;
 	pthread_mutexattr_t attr;
+	int vhost_fd = -1;
 	int rc;
 
 	if (opts == NULL) {
@@ -369,6 +417,7 @@ virtio_blk_init(struct vmctx *ctx, struct pci_vdev *dev, char *opts)
 				dev->slot, dev->func) >= sizeof(bident)) {
 		WPRINTF(("bident error, please check slot and func\n"));
 	}
+
 	bctxt = blockif_open(opts, bident);
 	if (bctxt == NULL) {
 		perror("Could not open backing file");
@@ -409,8 +458,9 @@ virtio_blk_init(struct vmctx *ctx, struct pci_vdev *dev, char *opts)
 		DPRINTF(("virtio_blk: pthread_mutex_init failed with "
 					"error %d!\n", rc));
 
+	blk->use_vhost = true;
 	/* init virtio struct and virtqueues */
-	virtio_linkup(&blk->base, &virtio_blk_ops, blk, dev, &blk->vq, BACKEND_VBSU);
+	virtio_linkup(&blk->base, &virtio_blk_ops, blk, dev, &blk->vq, blk->use_vhost ? BACKEND_VHOST : BACKEND_VBSU);
 	blk->base.mtx = &blk->mtx;
 
 	blk->vq.qsize = VIRTIO_BLK_RINGSZ;
@@ -451,8 +501,6 @@ virtio_blk_init(struct vmctx *ctx, struct pci_vdev *dev, char *opts)
 		blk->cfg.max_discard_seg = blockif_max_discard_seg(blk->bc);
 		blk->cfg.discard_sector_alignment = blockif_discard_sector_alignment(blk->bc);
 	}
-	blk->base.device_caps =
-		virtio_blk_get_caps(blk, !!blk->cfg.writeback);
 
 	/*
 	 * Should we move some of this into virtio.c?  Could
@@ -471,6 +519,26 @@ virtio_blk_init(struct vmctx *ctx, struct pci_vdev *dev, char *opts)
 		return -1;
 	}
 	virtio_set_io_bar(&blk->base, 0);
+
+	if (blk->use_vhost && dev->slot==19) {
+		printf("try to open /dev/vhost-blk %d !!!!!!!!!!!!!!!!!\n",dev->slot);
+		vhost_fd = open("/dev/vhost-blk", O_RDWR);
+		if (vhost_fd < 0)
+			WPRINTF(("open of vhost-blk failed\n"));
+		else {
+			printf("before vhost_blk_init !!!!!!!!!!!!!!!! \n");
+			blk->vhost_blk = vhost_blk_init(&blk->base, vhost_fd, 0);
+			if (!blk->vhost_blk) {
+				WPRINTF(("vhost_blk_init failed , fallback to userspace virtio\n"));
+				close(vhost_fd);
+				vhost_fd = -1;
+			}
+		}
+	}
+
+	blk->base.device_caps =
+		virtio_blk_get_caps(blk, !!blk->cfg.writeback);
+
 	return 0;
 }
 
@@ -483,6 +551,13 @@ virtio_blk_deinit(struct vmctx *ctx, struct pci_vdev *dev, char *opts)
 	if (dev->arg) {
 		DPRINTF(("virtio_blk: deinit\n"));
 		blk = (struct virtio_blk *) dev->arg;
+		if (blk->vhost_blk) {
+			vhost_blk_stop(blk->vhost_blk);
+			vhost_blk_deinit(blk->vhost_blk);
+			free(blk->vhost_blk);
+			blk->vhost_blk = NULL;
+		}
+
 		bctxt = blk->bc;
 		if (blockif_flush_all(bctxt))
 			WPRINTF(("vrito_blk:"
@@ -526,6 +601,89 @@ virtio_blk_cfgread(void *vdev, int offset, int size, uint32_t *retval)
 	ptr = (uint8_t *)&blk->cfg + offset;
 	memcpy(retval, ptr, size);
 	return 0;
+}
+
+static struct vhost_blk *
+vhost_blk_init(struct virtio_base *base, int vhostfd, int vq_idx)
+{
+	struct vhost_blk *vhost_blk = NULL;
+	uint64_t vhost_features= VIRTIO_BLK_S_HOSTCAPS;
+	uint64_t vhost_ext_features = 0;
+	uint32_t busyloop_timeout = 0;
+	int rc;
+
+	printf("1 in  vhost_blk_init !!!!!!!!!!!!!!!! \n");
+	vhost_blk = calloc(1, sizeof(struct vhost_blk));
+	if (!vhost_blk) {
+		WPRINTF(("vhost init out of memory \n"));
+		goto fail;
+	}
+
+	printf("2   vhost_blk_init !!!!!!!!!!!!!!!! \n");
+	/* pre-init before calling vhsot_dev_init */
+	vhost_blk->vdev.nvqs = 1;
+	vhost_blk->vdev.vqs = vhost_blk->vqs;
+	rc = vhost_dev_init(&vhost_blk->vdev, base, vhostfd, vq_idx, vhost_features, vhost_ext_features, busyloop_timeout);
+	if (rc < 0) {
+		WPRINTF(("vhost_dev_init failed\n"));
+		goto fail;
+	}
+	printf("3   vhost_blk_init !!!!!!!!!!!!!!!! \n");
+	return vhost_blk;
+fail:
+	if (vhost_blk)
+		free(vhost_blk);
+	return NULL;
+}
+
+static int
+vhost_blk_deinit(struct vhost_blk *vhost_blk)
+{
+	return vhost_dev_deinit(&vhost_blk->vdev);
+}
+
+static int
+vhost_blk_start(struct vhost_blk *vhost_blk, int fd)
+{
+	int rc;
+
+	if (vhost_blk->vhost_started) {
+		WPRINTF(("vhost blk already started\n"));
+		return 0;
+	}
+
+	rc = vhost_dev_start(&vhost_blk->vdev);
+
+	if (rc < 0) {
+		 WPRINTF(("vhost_dev_start failed\n"));
+		 goto fail;
+	}
+
+	rc = vhost_blk_set_backend(&vhost_blk->vdev, fd);
+	if (rc < 0) {
+		WPRINTF(("vhost_set_backend failed\n"));
+		goto fail;
+	}
+	vhost_blk->vhost_started = true;
+	return 0;
+fail:
+	return -1;
+}
+
+static int
+vhost_blk_stop(struct vhost_blk *vhost_blk)
+{
+	int rc;
+
+	if (!vhost_blk->vhost_started) {
+		 WPRINTF(("vhost blk already stopped\n"));
+		 return 0;
+	}
+	rc = vhost_dev_stop(&vhost_blk->vdev);
+	if (rc < 0)
+		WPRINTF(("vhost_dev_stop failed\n"));
+	vhost_blk->vhost_started = false;
+	return rc;
 }
 
 struct pci_vdev_ops pci_ops_virtio_blk = {

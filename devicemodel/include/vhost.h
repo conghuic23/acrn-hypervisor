@@ -143,6 +143,7 @@ int vhost_dev_stop(struct vhost_dev *vdev);
  * @return 0 on success and -1 on failure.
  */
 int vhost_net_set_backend(struct vhost_dev *vdev, int backend_fd);
+int vhost_blk_set_backend(struct vhost_dev *vdev, int backend_fd);
 
 /**
  * @}

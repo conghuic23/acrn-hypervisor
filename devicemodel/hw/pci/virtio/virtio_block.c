@@ -199,10 +199,13 @@ virtio_blk_done(struct blockif_req *br, int err)
 	 * Return the descriptor back to the host.
 	 * We wrote 1 byte (our status) to host.
 	 */
+	dm_debug("start kick\n");
 	pthread_mutex_lock(&blk->mtx);
 	vq_relchain(&blk->vq, io->idx, 1);
 	vq_endchains(&blk->vq, 0);
 	pthread_mutex_unlock(&blk->mtx);
+
+	dm_debug("after kick\n");
 }
 
 static void
@@ -216,7 +219,7 @@ virtio_blk_proc(struct virtio_blk *blk, struct virtio_vq_info *vq)
 	int writeop, type;
 	struct iovec iov[BLOCKIF_IOV_MAX + 2];
 	uint16_t idx, flags[BLOCKIF_IOV_MAX + 2];
-
+	dm_debug("virtio_blk_proc enter\n");
 	n = vq_getchain(vq, &idx, iov, BLOCKIF_IOV_MAX + 2, flags);
 
 	/*
@@ -240,6 +243,8 @@ virtio_blk_proc(struct virtio_blk *blk, struct virtio_vq_info *vq)
 	assert(iov[n].iov_len == 1);
 	assert(flags[n] & VRING_DESC_F_WRITE);
 
+
+	dm_debug("virtio_blk_proc after copy\n");
 	/*
 	 * XXX
 	 * The guest should not be setting the BARRIER flag because
@@ -311,6 +316,8 @@ virtio_blk_proc(struct virtio_blk *blk, struct virtio_vq_info *vq)
 		virtio_blk_done(&io->req, EOPNOTSUPP);
 		return;
 	}
+
+	dm_debug("virtio_blk_proc exit\n");
 	assert(err == 0);
 }
 
@@ -318,7 +325,6 @@ static void
 virtio_blk_notify(void *vdev, struct virtio_vq_info *vq)
 {
 	struct virtio_blk *blk = vdev;
-
 	while (vq_has_descs(vq))
 		virtio_blk_proc(blk, vq);
 }

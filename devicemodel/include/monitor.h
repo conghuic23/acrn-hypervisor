@@ -15,6 +15,8 @@
 #ifndef MONITOR_H
 #define MONITOR_H
 
+#include "trace.h"
+
 int monitor_init(struct vmctx *ctx);
 void monitor_close(void);
 
@@ -25,6 +27,9 @@ struct monitor_vm_ops {
 	int (*pause) (void *arg);
 	int (*unpause) (void *arg);
 	int (*query) (void *arg);
+    struct dbuffer_wrapper (*trace) (void *arg);
+    int (*flush) (void *arg);
+    int (*clear) (void *arg);
 };
 
 int monitor_register_vm_ops(struct monitor_vm_ops *ops, void *arg,

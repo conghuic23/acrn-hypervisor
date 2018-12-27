@@ -64,5 +64,8 @@ int pause_vm(const char *vmname);
 int continue_vm(const char *vmname);
 int suspend_vm(const char *vmname);
 int resume_vm(const char *vmname, unsigned reason);
+int trace_vm(const char *vmname);
+int flush_vm(const char *vmname);
+int clear_vm(const char *vmname);
 
 #endif				/* _ACRNCTL_H_ */

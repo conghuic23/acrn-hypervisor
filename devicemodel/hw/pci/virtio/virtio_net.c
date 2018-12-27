@@ -503,7 +503,7 @@ virtio_net_proctx(struct virtio_net *net, struct virtio_vq_info *vq)
 	}
 
 	DPRINTF(("virtio: packet send, %d bytes, %d segs\n\r", plen, n));
-	net->virtio_net_tx(net, &iov[1], n - 1, plen);
+    net->virtio_net_tx(net, &iov[1], n - 1, plen);
 
 	/* chain is processed, release it and set tlen */
 	vq_relchain(vq, idx, tlen);

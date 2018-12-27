@@ -47,6 +47,7 @@
 #include "block_if.h"
 #include "ahci.h"
 #include "dm_string.h"
+#include "trace.h"
 
 /*
  * Notes:
@@ -331,7 +332,7 @@ blockif_proc(struct blockif_ctxt *bc, struct blockif_elem *be)
 	struct blockif_req *br;
 	ssize_t len;
 	int err;
-
+	dm_debug("blockif_proc enter op: %d\n",be->op);
 	br = be->req;
 	err = 0;
 	switch (be->op) {
@@ -370,6 +371,7 @@ blockif_proc(struct blockif_ctxt *bc, struct blockif_elem *be)
 		break;
 	}
 
+	dm_debug("block_process_done\n");
 	be->status = BST_DONE;
 
 	(*br->callback)(br, err);

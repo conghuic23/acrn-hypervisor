@@ -362,6 +362,8 @@ DEFINE_HANDLER(handle_stop, stop);
 DEFINE_HANDLER(handle_suspend, suspend);
 DEFINE_HANDLER(handle_pause, pause);
 DEFINE_HANDLER(handle_continue, unpause);
+DEFINE_HANDLER(handle_flush, flush);
+DEFINE_HANDLER(handle_clear, clear);
 
 static void handle_resume(struct mngr_msg *msg, int client_fd, void *param)
 {
@@ -412,6 +414,49 @@ static void handle_query(struct mngr_msg *msg, int client_fd, void *param)
 	mngr_send_msg(client_fd, &ack, NULL, ACK_TIMEOUT);
 }
 
+static void handle_trace(struct mngr_msg *msg, int client_fd, void *param)
+{
+    struct mngr_msg ack;
+    struct vm_ops *ops;
+    struct dbuffer_wrapper dbuffer;
+    //size_t ptr = 0;
+    //char buffer_line[256];
+
+    ack.magic = MNGR_MSG_MAGIC;
+    ack.msgid = msg->msgid;
+    ack.timestamp = msg->timestamp;
+
+    LIST_FOREACH(ops, &vm_ops_head, list) {
+        if (ops->ops->trace) {
+            dbuffer = ops->ops->trace(ops->arg);
+
+            ack.data.acrnd_trace.depth = dbuffer.depth;
+            ack.data.acrnd_trace.width = dbuffer.width;
+            ack.data.acrnd_trace.buffer = calloc(dbuffer.depth, dbuffer.width);
+
+            printf("handle_trace: reversed: %u, ptr: %lu\n", dbuffer.reversed, dbuffer.ptr);
+            if (dbuffer.reversed && dbuffer.ptr < (dbuffer.depth - 1)) {
+                memcpy(ack.data.acrnd_trace.buffer, dbuffer.buffer + (dbuffer.ptr + 1) * dbuffer.width,
+                        (dbuffer.depth - dbuffer.ptr - 1) * dbuffer.width);
+                memcpy(ack.data.acrnd_trace.buffer + (dbuffer.depth - dbuffer.ptr - 1) * dbuffer.width,
+                        dbuffer.buffer, (dbuffer.ptr + 1) * dbuffer.width);
+            } else {
+                memcpy(ack.data.acrnd_trace.buffer, dbuffer.buffer, dbuffer.depth * dbuffer.width);
+            }
+            /*
+            while(ptr != dbuffer.depth) {
+                memcpy(buffer_line, ack.data.acrnd_trace.buffer + ptr * dbuffer.width, dbuffer.width);
+                printf("%s\r", buffer_line);
+                ptr++;
+            }*/
+            //printf("handle_trace: %s\n", (char *)ack.data.acrnd_trace.buffer);
+            break;
+        }
+    }
+
+    mngr_send_msg(client_fd, &ack, NULL, ACK_TIMEOUT);
+}
+
 static struct monitor_vm_ops pmc_ops = {
 	.stop       = NULL,
 	.resume     = vm_monitor_resume,
@@ -419,6 +464,21 @@ static struct monitor_vm_ops pmc_ops = {
 	.pause      = NULL,
 	.unpause    = NULL,
 	.query      = vm_monitor_query,
+    .trace      = NULL,
+    .flush      = NULL,
+    .clear      = NULL,
+};
+
+static struct monitor_vm_ops debug_ops = {
+    .stop       = NULL,
+    .resume     = NULL,
+    .suspend    = NULL,
+	.pause      = NULL,
+	.unpause    = NULL,
+	.query      = NULL,
+    .trace      = vm_monitor_trace,
+    .flush      = vm_monitor_flush,
+    .clear      = vm_monitor_clear,
 };
 
 int monitor_init(struct vmctx *ctx)
@@ -453,6 +513,9 @@ int monitor_init(struct vmctx *ctx)
 	ret += mngr_add_handler(monitor_fd, DM_PAUSE, handle_pause, NULL);
 	ret += mngr_add_handler(monitor_fd, DM_CONTINUE, handle_continue, NULL);
 	ret += mngr_add_handler(monitor_fd, DM_QUERY, handle_query, NULL);
+    ret += mngr_add_handler(monitor_fd, DM_TRACE, handle_trace, NULL);
+    ret += mngr_add_handler(monitor_fd, DM_FLUSH, handle_flush, NULL);
+    ret += mngr_add_handler(monitor_fd, DM_CLEAR, handle_clear, NULL);
 
 	if (ret) {
 		fprintf(stderr, "%s %d\r\n", __FUNCTION__, __LINE__);
@@ -460,6 +523,7 @@ int monitor_init(struct vmctx *ctx)
 	}
 
 	monitor_register_vm_ops(&pmc_ops, ctx, "PMC_VM_OPs");
+    monitor_register_vm_ops(&debug_ops, ctx, "DBG_VM_OPs");
 
 	start_intr_storm_monitor(ctx);
 

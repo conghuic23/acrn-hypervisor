@@ -33,6 +33,7 @@
 #include "types.h"
 #include "vmm.h"
 #include "dm_string.h"
+#include "trace.h"
 
 struct vmctx;
 extern int guest_ncpus;

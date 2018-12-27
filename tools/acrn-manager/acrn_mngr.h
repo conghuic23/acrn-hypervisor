@@ -62,7 +62,21 @@ struct mngr_msg {
 			time_t t;
 		} rtc_timer;
 
+        /* req of ACRND_TRACE */
+        struct req_acrnd_trace {
+            size_t depth;
+            size_t width;
+            void *buffer;
+        } acrnd_trace;
 	} data;
+};
+
+struct mngr_data {
+    unsigned long long magic;
+    unsigned int msgid;
+    unsigned long timestamp;
+
+    void *data;
 };
 
 /* mngr_msg event types */
@@ -80,7 +94,10 @@ enum dm_msgid {
 	DM_PAUSE,		/* Freeze this virtual machine */
 	DM_CONTINUE,		/* Unfreeze this virtual machine */
 	DM_QUERY,		/* Ask power state of this UOS */
-	DM_MAX,
+    DM_TRACE,
+	DM_FLUSH,
+    DM_CLEAR,
+    DM_MAX,
 };
 
 /* DM handled message req/ack pairs */

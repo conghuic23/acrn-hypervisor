@@ -114,6 +114,7 @@ SRCS += hw/pci/npk.c
 
 # core
 #SRCS += core/bootrom.c
+SRCS += core/trace.c
 SRCS += core/monitor.c
 SRCS += core/sw_load_common.c
 SRCS += core/sw_load_bzimage.c

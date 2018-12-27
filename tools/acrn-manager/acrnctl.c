@@ -1,5 +1,5 @@
 /*
- * ProjectAcrn 
+ * ProjectAcrn
  * Acrnctl
  *
  * Copyright (C) 2018 Intel Corporation. All rights reserved.
@@ -37,6 +37,9 @@
 #define SUSPEND_DESC   "Switch virtual machine to suspend state"
 #define RESUME_DESC    "Resume virtual machine from suspend state"
 #define RESET_DESC     "Stop and then start virtual machine VM_NAME"
+#define TRACE_DESC     "Print debug log of machine VM_NAME"
+#define FLUSH_DESC     "Flush debug log into /tmp/acrn-dm-[VM_NAME].log"
+#define CLEAR_DESC     "Clear debug log of machine VM_NAME"
 
 #define STOP_TIMEOUT	30U
 
@@ -584,6 +587,76 @@ static int acrnctl_do_resume(int argc, char *argv[])
 	return 0;
 }
 
+static int acrnctl_do_trace(int argc, char *argv[])
+{
+    struct vmmngr_struct *s;
+
+    s = vmmngr_find(argv[1]);
+    if (!s) {
+        printf("Can't find vm %s\n", argv[1]);
+        return -1;
+    }
+
+    switch (s->state) {
+        case VM_STARTED:
+            printf("begin\n");
+            trace_vm(argv[1]);
+            printf("trace %s debug log\n", argv[1]);
+            break;
+        default:
+            printf("%s current state %s, can't print trace log\n",
+                argv[1], state_str[s->state]);
+    }
+
+    return 0;
+}
+
+static int acrnctl_do_flush(int argc, char *argv[])
+{
+    struct vmmngr_struct *s;
+
+    s = vmmngr_find(argv[1]);
+    if (!s) {
+        printf("Can't find vm %s\n", argv[1]);
+        return -1;
+    }
+
+    switch (s->state) {
+        case VM_STARTED:
+            flush_vm(argv[1]);
+            printf("flush %s debug log\n", argv[1]);
+            break;
+        default:
+            printf("%s current state %s, can't flush debug log\n",
+                argv[1], state_str[s->state]);
+    }
+
+    return 0;
+}
+
+static int acrnctl_do_clear(int argc, char *argv[])
+{
+    struct vmmngr_struct *s;
+
+    s = vmmngr_find(argv[1]);
+    if (!s) {
+        printf("Can't find vm %s\n", argv[1]);
+        return -1;
+    }
+
+    switch (s->state) {
+        case VM_STARTED:
+            clear_vm(argv[1]);
+            printf("clear %s debug log\n", argv[1]);
+            break;
+        default:
+            printf("%s current state %s, can't flush debug log\n",
+                argv[1], state_str[s->state]);
+    }
+
+    return 0;
+}
+
 static int wait_vm_stop(const char * vmname, unsigned int timeout)
 {
 	unsigned long t = timeout;
@@ -699,6 +772,9 @@ struct acrnctl_cmd acmds[] = {
 	ACMD("suspend", acrnctl_do_suspend, SUSPEND_DESC, df_valid_args),
 	ACMD("resume", acrnctl_do_resume, RESUME_DESC, df_valid_args),
 	ACMD("reset", acrnctl_do_reset, RESET_DESC, df_valid_args),
+    ACMD("flush", acrnctl_do_flush, FLUSH_DESC, valid_start_args),
+    ACMD("trace", acrnctl_do_trace, TRACE_DESC, valid_start_args),
+    ACMD("clear", acrnctl_do_clear, CLEAR_DESC, valid_start_args),
 };
 
 #define NCMD	(sizeof(acmds)/sizeof(struct acrnctl_cmd))

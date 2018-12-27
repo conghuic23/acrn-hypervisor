@@ -42,7 +42,7 @@ endchoice
 
 choice
 	prompt "I/O emulation completion mode"
-	default IOREQ_NOTIFICATION
+	default IOREQ_POLLING
 	help
 	  Select the mode of I/O emulation completion
 

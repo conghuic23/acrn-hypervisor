@@ -38,6 +38,8 @@
 #include <sysexits.h>
 #include <stdbool.h>
 #include <getopt.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 
 #include "vmmapi.h"
 #include "sw_load.h"
@@ -66,6 +68,7 @@
 #include "vmcfg.h"
 #include "tpm.h"
 #include "virtio.h"
+#include <wordexp.h>
 
 #define GUEST_NIO_PORT		0x488	/* guest upcalls via i/o port */
 
@@ -730,7 +733,12 @@ static struct option long_options[] = {
 	{0,			0,			0,  0  },
 };
 
+static struct option long_options_fuzzing[] = {
+	{"cmdfile",		required_argument,	0, 'f' },
+	{0,			0,			0,  0  },
+};
 static char optstr[] = "hAWYvE:k:r:B:p:c:s:m:l:U:G:i:";
+static char optstr_fuzzing[] = "f:";
 
 int
 dm_run(int argc, char *argv[])
@@ -1009,13 +1017,83 @@ fail:
 	exit(0);
 }
 
+int parse_args_from_file(int *argc, char *argv[], char *optarg, wordexp_t *p)
+{
+	char *filename;
+	char buf[4096];
+	struct stat st;
+	int fd, i;
+
+	filename = strdup(optarg);
+	if (!filename)
+		return -1;
+	fd = open(filename, O_RDONLY);
+	if (fd < 0) {
+		printf("failed to open file %s\n", filename);
+		return -1;
+	}
+
+	fstat(fd, &st);
+
+	if (st.st_size) {
+		if (read(fd, buf, st.st_size-1) != st.st_size-1) {
+			printf("read error !\n");
+			goto err;
+		}
+		printf("buf= %s \n",buf);
+	} else
+		goto err;
+
+	if(wordexp(buf, p, WRDE_NOCMD) || !p->we_wordc) {
+		printf("parse arg err\n");
+		goto err;
+	}
+	*argc = p->we_wordc;
+	for (i = 0; i < *argc; i++)
+		argv[i] = p->we_wordv[i];
+	close(fd);
+	free(filename);
+	return 0;
+
+err:
+	if (fd > 0)
+		close(fd);
+	if (filename)
+		free(filename);
+	return -1;
+}
+
 int main(int argc, char *argv[])
 {
 	int c;
 	int option_idx = 0;
 	int dm_options = 0, vmcfg = 0;
 	int index = -1;
+	int argc_f=0;
+	char *argv_f[1024];
+	wordexp_t p;
 
+	while ((c = getopt_long(argc, argv, optstr_fuzzing, long_options_fuzzing,
+			&option_idx)) != -1) {
+		switch (c) {
+		case 'f':
+			if (parse_args_from_file(&argc_f, argv_f, optarg, &p)) {
+				printf("failed to parse args from file\n");
+				argc_f = 0;
+				wordfree(&p);
+			}
+			break;
+		default:
+			continue;
+		}
+	}
+	if (argc_f) {
+		argc = argc_f;
+		argv = argv_f;
+	}
+
+	option_idx = 0;
+	#if 0
 	while ((c = getopt_long(argc, argv, optstr, long_options,
 			&option_idx)) != -1) {
 		switch (c) {
@@ -1031,6 +1109,7 @@ int main(int argc, char *argv[])
 			dm_options++;
 		}
 	}
+	#endif
 
 	if (!vmcfg) {
 		optind = 0;

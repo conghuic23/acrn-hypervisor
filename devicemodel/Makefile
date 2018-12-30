@@ -8,7 +8,7 @@ DM_OBJDIR ?= $(CURDIR)/build
 DM_BUILD_VERSION ?=
 DM_BUILD_TAG ?=
 
-CC ?= gcc
+CC ?= afl-gcc
 
 CFLAGS := -g -O0 -std=gnu11
 CFLAGS += -D_GNU_SOURCE

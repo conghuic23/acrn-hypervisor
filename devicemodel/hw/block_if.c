@@ -127,6 +127,14 @@ struct blockif_ctxt {
 
 	/* write cache enable */
 	uint8_t			wce;
+	uint64_t		r_bytes;
+	uint64_t		w_bytes;
+	uint64_t		w_count;
+	uint64_t		count_512k;
+	uint64_t		count_2M;
+	uint64_t		count_128k;
+	uint64_t		total_count;
+
 };
 
 static pthread_once_t blockif_once = PTHREAD_ONCE_INIT;
@@ -332,11 +340,26 @@ blockif_proc(struct blockif_ctxt *bc, struct blockif_elem *be)
 	struct blockif_req *br;
 	ssize_t len;
 	int err;
-	dm_debug("blockif_proc enter op: %d\n",be->op);
+	int i;
+	uint64_t bytes=0;
+	//dm_debug("blockif_proc enter op: %d\n",be->op);
 	br = be->req;
 	err = 0;
+
 	switch (be->op) {
 	case BOP_READ:
+		for (i=0;i<br->iovcnt;i++)
+			bytes+=br->iov[i].iov_len;
+
+		bc->r_bytes += bytes;
+		if (bytes == 128 << 10)
+			bc->count_128k++;
+		else if (bytes == 512 << 10)
+			bc->count_512k++;
+		else if (bytes == 2048 << 10)
+			bc->count_2M++;
+		bc->total_count++;
+
 		len = preadv(bc->fd, br->iov, br->iovcnt,
 				 br->offset + bc->sub_file_start_lba);
 		if (len < 0)
@@ -345,6 +368,12 @@ blockif_proc(struct blockif_ctxt *bc, struct blockif_elem *be)
 			br->resid -= len;
 		break;
 	case BOP_WRITE:
+		for (i=0;i<br->iovcnt;i++)
+			bytes+=br->iov[i].iov_len;
+		bc->w_bytes += bytes;
+		bc->w_count ++;
+
+
 		if (bc->rdonly) {
 			err = EROFS;
 			break;
@@ -371,7 +400,8 @@ blockif_proc(struct blockif_ctxt *bc, struct blockif_elem *be)
 		break;
 	}
 
-	dm_debug("block_process_done\n");
+	dm_debug("write bytes: %ld write count: %ld read byptes: %ld 128k: %ld 512k: %ld 2M: %ld total:%ld\n",
+			bc->w_bytes, bc->w_count, bc->r_bytes, bc->count_128k, bc->count_512k, bc->count_2M,bc->total_count);
 	be->status = BST_DONE;
 
 	(*br->callback)(br, err);
@@ -758,6 +788,13 @@ blockif_open(const char *optstr, const char *ident)
 		pthread_create(&bc->btid[i], NULL, blockif_thr, bc);
 		pthread_setname_np(bc->btid[i], tname);
 	}
+	bc->r_bytes=0;
+	bc->w_bytes=0;
+	bc->count_512k=0;
+	bc->count_2M=0;
+	bc->count_128k=0;
+	bc->total_count=0;
+
 
 	return bc;
 err:

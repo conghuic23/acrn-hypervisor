@@ -485,6 +485,7 @@
 #define	PCIS_ACCEL_PROCESSING	0x00
 
 #define	PCIC_INSTRUMENT	0x13
+#define	PCIC_I2C	0x14
 
 #define	PCIC_OTHER	0xff
 

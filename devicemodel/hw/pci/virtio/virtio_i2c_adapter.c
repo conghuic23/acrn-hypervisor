@@ -38,6 +38,7 @@
 #include "dm.h"
 #include "pci_core.h"
 #include "virtio.h"
+#include "i2c_core.h"
 
 static int virtio_i2c_debug=1;
 #define DPRINTF(params) do { if (virtio_i2c_debug) printf params; } while (0)
@@ -55,6 +56,7 @@ struct virtio_i2cadap_msg {
  */
 struct virtio_i2cadap {
 	struct virtio_base base;
+	struct i2c_adap_vdev *adap;
 	pthread_mutex_t mtx;
 	struct virtio_vq_info vq;
 	char ident[256];
@@ -128,6 +130,16 @@ virtio_i2cadap_init(struct vmctx *ctx, struct pci_vdev *dev, char *opts)
 		return -1;
 	}
 
+	i2cadap->adap = i2c_adap_open(opts);
+	if (!i2cadap->adap)
+		return -1;
+	i2c_vdev_add_dsdt(i2cadap->adap, dev->slot, dev->func);
+
+	if (!i2cadap->adap) {
+		 WPRINTF(("failed to init i2c adapter\n"));
+		return -1;
+	}
+
 	for (i = 0; i < 64; i++) {
 		struct virtio_i2cadap_msg *msg = &i2cadap->msgs[i];
 		msg->i2cadap = i2cadap;
@@ -181,7 +193,7 @@ virtio_i2cadap_init(struct vmctx *ctx, struct pci_vdev *dev, char *opts)
 	 */
 	pci_set_cfgdata16(dev, PCIR_DEVICE, VIRTIO_DEV_I2CADAP);
 	pci_set_cfgdata16(dev, PCIR_VENDOR, INTEL_VENDOR_ID);
-	pci_set_cfgdata8(dev, PCIR_CLASS, PCIC_I2C);
+	pci_set_cfgdata8(dev, PCIR_CLASS, PCIC_CRYPTO);
 	pci_set_cfgdata16(dev, PCIR_SUBDEV_0, VIRTIO_TYPE_I2CADAP);
 	pci_set_cfgdata16(dev, PCIR_SUBVEND_0, INTEL_VENDOR_ID);
 

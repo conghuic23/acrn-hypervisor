@@ -64,6 +64,7 @@ SRCS += lib/dm_string.c
 SRCS += hw/block_if.c
 SRCS += hw/usb_core.c
 SRCS += hw/uart_core.c
+SRCS += hw/i2c_core.c
 SRCS += hw/pci/virtio/virtio.c
 SRCS += hw/pci/virtio/virtio_kernel.c
 SRCS += hw/pci/virtio/vhost.c

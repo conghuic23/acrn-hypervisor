@@ -86,6 +86,8 @@
 #define VMX_GUEST_PDPTE2_HIGH   0x0000280FU
 #define VMX_GUEST_PDPTE3_FULL   0x00002810U
 #define VMX_GUEST_PDPTE3_HIGH   0x00002811U
+#define VMX_GUEST_IA32_BNDCFGS_FULL   0x00002812U
+
 /* 64-bit host-state fields */
 #define VMX_HOST_IA32_PAT_FULL          0x00002C00U
 #define VMX_HOST_IA32_PAT_HIGH          0x00002C01U
@@ -355,6 +357,8 @@
 #define VMX_EXIT_CTLS_SAVE_EFER        (1U<<20U)
 #define VMX_EXIT_CTLS_LOAD_EFER        (1U<<21U)
 #define VMX_EXIT_CTLS_SAVE_PTMR        (1U<<22U)
+#define VMX_EXIT_CTLS_CLEAR_BNDCFGS    (1U<<23U)
+
 
 /* VMX entry control bits */
 #define VMX_ENTRY_CTLS_LOAD_DBG        (1U<<2U)
@@ -364,6 +368,8 @@
 #define VMX_ENTRY_CTLS_LOAD_PERF       (1U<<13U)
 #define VMX_ENTRY_CTLS_LOAD_PAT        (1U<<14U)
 #define VMX_ENTRY_CTLS_LOAD_EFER       (1U<<15U)
+#define VMX_ENTRY_CTLS_LOAD_BNDCFGS    (1U<<16U)
+
 
 /* VMX entry/exit Interrupt info */
 #define VMX_INT_INFO_ERR_CODE_VALID	(1U<<11U)

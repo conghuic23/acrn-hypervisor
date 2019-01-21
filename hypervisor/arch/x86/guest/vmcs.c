@@ -65,6 +65,7 @@ static void init_guest_vmx(struct acrn_vcpu *vcpu, uint64_t cr0, uint64_t cr3,
 	vcpu_set_guest_msr(vcpu, MSR_IA32_PAT, PAT_POWER_ON_VALUE);
 	exec_vmwrite(VMX_GUEST_IA32_PAT_FULL, PAT_POWER_ON_VALUE);
 	exec_vmwrite(VMX_GUEST_DR7, DR7_INIT_VALUE);
+	exec_vmwrite64(VMX_GUEST_IA32_BNDCFGS_FULL, 0U);
 }
 
 static void init_guest_state(struct acrn_vcpu *vcpu)
@@ -442,6 +443,8 @@ static void init_entry_ctrl(const struct acrn_vcpu *vcpu)
 	value32 = (VMX_ENTRY_CTLS_LOAD_EFER |
 		   VMX_ENTRY_CTLS_LOAD_PAT);
 
+	value32 |= VMX_ENTRY_CTLS_LOAD_BNDCFGS;
+
 	if (get_vcpu_mode(vcpu) == CPU_MODE_64BIT) {
 		value32 |= (VMX_ENTRY_CTLS_IA32E_MODE);
 	}
@@ -485,7 +488,8 @@ static void init_exit_ctrl(const struct acrn_vcpu *vcpu)
 	value32 = check_vmx_ctrl(MSR_IA32_VMX_EXIT_CTLS,
 			 VMX_EXIT_CTLS_ACK_IRQ | VMX_EXIT_CTLS_SAVE_PAT |
 			 VMX_EXIT_CTLS_LOAD_PAT | VMX_EXIT_CTLS_LOAD_EFER |
-			 VMX_EXIT_CTLS_SAVE_EFER | VMX_EXIT_CTLS_HOST_ADDR64);
+			 VMX_EXIT_CTLS_SAVE_EFER | VMX_EXIT_CTLS_HOST_ADDR64 |
+			 VMX_EXIT_CTLS_CLEAR_BNDCFGS);
 
 	exec_vmwrite32(VMX_EXIT_CONTROLS, value32);
 	pr_dbg("VMX_EXIT_CONTROL: 0x%x ", value32);

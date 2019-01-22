@@ -50,9 +50,6 @@ static int virtio_i2c_debug;
 
 
 
-#define I2C_MSG_OK	0
-#define I2C_MSG_ERR	1
-
 struct virtio_i2cadap_msg {
 	struct virtio_i2cadap *i2cadap;
 	uint8_t *status;
@@ -110,7 +107,6 @@ virtio_i2cadap_proc(struct virtio_i2cadap *i2cadap, struct virtio_vq_info *vq)
 	struct i2c_msg msg;
 	struct i2c_rdwr_ioctl_data work_queue;
 	char *status;
-	int ret;
 	int n;
 	DPRINTF(("virtio_i2cadap_proc enter\n"));
 	n = vq_getchain(vq, &idx, iov, 3, flags);
@@ -136,11 +132,8 @@ virtio_i2cadap_proc(struct virtio_i2cadap *i2cadap, struct virtio_vq_info *vq)
 
 	work_queue.nmsgs = 1;
 	work_queue.msgs = &msg;
-	ret = ioctl(i2cadap->adap->fd, I2C_RDWR, &work_queue);
-	if (ret < 0)
-		*status = I2C_MSG_ERR;	
-	else
-		*status = I2C_MSG_OK;
+	*status = i2c_adap_process(i2cadap->adap, msg.addr, &work_queue);
+
 	if (msg.len)
 		DPRINTF(("@@@@ after i2c msg: flags=0x%x, addr=0x%x, len=0x%x buf=%x\n",
 				msg.flags,

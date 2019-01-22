@@ -1350,8 +1350,10 @@ pci_xhci_portregs_write(struct pci_xhci_vdev *xdev,
 		p->portsc &= XHCI_PS_PED | XHCI_PS_PLS_MASK |
 			     XHCI_PS_SPEED_MASK | XHCI_PS_PIC_MASK;
 
+#if 0
 		if (XHCI_DEVINST_PTR(xdev, port))
 			p->portsc |= XHCI_PS_CCS;
+#endif
 
 		p->portsc |= (value &
 			      ~(XHCI_PS_OCA |

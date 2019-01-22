@@ -27,6 +27,7 @@
  */
 
 #include <sys/param.h>
+#include <sys/uio.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,21 +35,34 @@
 #include <assert.h>
 #include <pthread.h>
 #include <openssl/md5.h>
+#include <linux/i2c.h>
+#include <linux/i2c-dev.h>
+#include <sys/ioctl.h>
 
 #include "dm.h"
 #include "pci_core.h"
 #include "virtio.h"
 #include "i2c_core.h"
 
-static int virtio_i2c_debug=1;
+static int virtio_i2c_debug;
 #define DPRINTF(params) do { if (virtio_i2c_debug) printf params; } while (0)
 #define WPRINTF(params) (printf params)
 
+
+
+#define I2C_MSG_OK	0
+#define I2C_MSG_ERR	1
 
 struct virtio_i2cadap_msg {
 	struct virtio_i2cadap *i2cadap;
 	uint8_t *status;
 	uint16_t idx;
+};
+
+struct virtio_i2c_outhdr {
+	uint16_t addr;      /* slave address */
+	uint16_t flags;
+	uint16_t len;       /*msg length*/
 };
 
 /*
@@ -88,20 +102,60 @@ virtio_i2cadap_reset(void *vdev)
 }
 
 static void
-virtio_i2cadap_done()
-{
-	/*
-	 * Return the descriptor back to the host.
-	 * We wrote 1 byte (our status) to host.
-	 */
-	printf("virtio_i2cadap_done \n");
-}
-
-static void
 virtio_i2cadap_proc(struct virtio_i2cadap *i2cadap, struct virtio_vq_info *vq)
 {
-	printf("virtio_i2cadap_proc enter\n");
-	virtio_i2cadap_done();
+	struct iovec iov[3];
+	uint16_t idx, flags[3];
+	struct virtio_i2c_outhdr *hdr;
+	struct i2c_msg msg;
+	struct i2c_rdwr_ioctl_data work_queue;
+	char *status;
+	int ret;
+	int n;
+	DPRINTF(("virtio_i2cadap_proc enter\n"));
+	n = vq_getchain(vq, &idx, iov, 3, flags);
+	if (n < 2 || n >3)
+	{
+		WPRINTF(("virtio_i2cadap_proc: failed to get iov from virtqueue\n"));
+		return;
+	}
+
+	hdr = iov[0].iov_base;
+	// add assert here!!!!
+	msg.addr = hdr->addr;
+	msg.flags = hdr->flags;
+	if (hdr->len) {
+		msg.buf = iov[1].iov_base;
+		msg.len = iov[1].iov_len;
+		status = iov[2].iov_base;
+	} else {
+		msg.buf = NULL;
+		msg.len = 0;
+		status = iov[1].iov_base;
+	}
+
+	work_queue.nmsgs = 1;
+	work_queue.msgs = &msg;
+	ret = ioctl(i2cadap->adap->fd, I2C_RDWR, &work_queue);
+	if (ret < 0)
+		*status = I2C_MSG_ERR;	
+	else
+		*status = I2C_MSG_OK;
+	if (msg.len)
+		DPRINTF(("@@@@ after i2c msg: flags=0x%x, addr=0x%x, len=0x%x buf=%x\n",
+				msg.flags,
+				msg.addr,
+				msg.len,
+				msg.buf[0]));
+	else
+		DPRINTF(("@@@@ after i2c msg: flags=0x%x, addr=0x%x, len=0x%x\n",
+				msg.flags,
+				msg.addr,
+				msg.len));
+
+	pthread_mutex_lock(&i2cadap->mtx);
+	vq_relchain(vq, idx, 1);
+	pthread_mutex_lock(&i2cadap->mtx);
 }
 
 static void
@@ -109,7 +163,8 @@ virtio_i2cadap_notify(void *vdev, struct virtio_vq_info *vq)
 {
 	struct virtio_i2cadap *i2cadap = vdev;
 
-	while (vq_has_descs(vq))
+	/*make sure each time process one request*/
+	if (vq_has_descs(vq))
 		virtio_i2cadap_proc(i2cadap, vq);
 }
 

@@ -1836,8 +1836,10 @@ pci_xhci_cmd_disable_slot(struct pci_xhci_vdev *xdev, uint32_t slot)
 			break;
 
 	if (i <= XHCI_MAX_DEVS && XHCI_PORTREG_PTR(xdev, i)) {
+#if 0
 		XHCI_PORTREG_PTR(xdev, i)->portsc &= ~(XHCI_PS_CSC |
 				XHCI_PS_CCS | XHCI_PS_PED | XHCI_PS_PP);
+#endif
 
 		udev = dev->dev_instance;
 		assert(udev);
@@ -3678,11 +3680,14 @@ pci_xhci_reset_port(struct pci_xhci_vdev *xdev, int portn, int warm)
 	di = &xdev->native_ports[index].info;
 
 	speed = pci_xhci_convert_speed(di->speed);
-	port->portsc &= ~(XHCI_PS_PLS_MASK | XHCI_PS_PR | XHCI_PS_PRC);
-	port->portsc |= XHCI_PS_PED | XHCI_PS_SPEED_SET(speed);
+	port->portsc &= ~(XHCI_PS_PLS_MASK | XHCI_PS_PR | XHCI_PS_PRC | XHCI_PS_CSC);
+	port->portsc |= XHCI_PS_PED | XHCI_PS_CCS | XHCI_PS_PEC | XHCI_PS_SPEED_SET(speed);
 
 	if (warm && di->bcd >= 0x300)
 		port->portsc |= XHCI_PS_WRC;
+
+	if (di->bcd >= 300)
+		port->portsc &= ~XHCI_PS_PEC;
 
 	if ((port->portsc & XHCI_PS_PRC) == 0) {
 		port->portsc |= XHCI_PS_PRC;

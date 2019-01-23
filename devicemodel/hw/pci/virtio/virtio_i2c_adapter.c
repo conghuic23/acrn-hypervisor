@@ -161,6 +161,13 @@ virtio_i2cadap_notify(void *vdev, struct virtio_vq_info *vq)
 		virtio_i2cadap_proc(i2cadap, vq);
 }
 
+static void
+i2cadap_write_dsdt(struct pci_vdev *dev)
+{
+	struct virtio_i2cadap *i2cadap = (struct virtio_i2cadap *) dev->arg;
+	i2c_vdev_add_dsdt(i2cadap->adap, dev->slot, dev->func);
+}
+
 static int
 virtio_i2cadap_init(struct vmctx *ctx, struct pci_vdev *dev, char *opts)
 {
@@ -181,7 +188,6 @@ virtio_i2cadap_init(struct vmctx *ctx, struct pci_vdev *dev, char *opts)
 	i2cadap->adap = i2c_adap_open(opts);
 	if (!i2cadap->adap)
 		return -1;
-	i2c_vdev_add_dsdt(i2cadap->adap, dev->slot, dev->func);
 
 	if (!i2cadap->adap) {
 		 WPRINTF(("failed to init i2c adapter\n"));
@@ -267,10 +273,11 @@ virtio_i2cadap_deinit(struct vmctx *ctx, struct pci_vdev *dev, char *opts)
 }
 
 struct pci_vdev_ops pci_ops_virtio_i2cadap = {
-	.class_name	= "virtio-i2cadapt",
-	.vdev_init	= virtio_i2cadap_init,
-	.vdev_deinit	= virtio_i2cadap_deinit,
-	.vdev_barwrite	= virtio_pci_write,
-	.vdev_barread	= virtio_pci_read
+	.class_name		= "virtio-i2cadapt",
+	.vdev_init		= virtio_i2cadap_init,
+	.vdev_deinit		= virtio_i2cadap_deinit,
+	.vdev_barwrite		= virtio_pci_write,
+	.vdev_barread		= virtio_pci_read,
+	.vdev_write_dsdt	= i2cadap_write_dsdt,
 };
 DEFINE_PCI_DEVTYPE(pci_ops_virtio_i2cadap);

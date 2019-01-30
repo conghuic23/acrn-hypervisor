@@ -768,6 +768,7 @@ xhci_vbdp_thread(void *data)
 			continue;
 
 		speed = pci_xhci_convert_speed(p->info.speed);
+		usleep(100000);
 		pci_xhci_connect_port(xdev, p->vport, speed, 1);
 		UPRINTF(LINF, "change portsc for %d-%s\r\n", p->info.path.bus,
 				usb_dev_path(&p->info.path));

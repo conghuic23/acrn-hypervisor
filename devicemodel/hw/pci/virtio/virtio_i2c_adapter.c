@@ -44,7 +44,7 @@
 #include "virtio.h"
 #include "i2c_core.h"
 
-static int virtio_i2c_debug;
+static int virtio_i2c_debug=1;
 #define DPRINTF(params) do { if (virtio_i2c_debug) printf params; } while (0)
 #define WPRINTF(params) (printf params)
 

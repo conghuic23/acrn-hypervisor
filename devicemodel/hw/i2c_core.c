@@ -47,7 +47,7 @@
 #include "acpi.h"
 
 
-static int i2c_debug;
+static int i2c_debug=1;
 #define DPRINTF(params) do { if (i2c_debug) printf params; } while (0)
 #define WPRINTF(params) (printf params)
 
@@ -75,136 +75,44 @@ i2c_adap_process(struct i2c_adap_vdev *adap, uint16_t addr, struct i2c_rdwr_ioct
 void
 i2c_vdev_add_dsdt(struct i2c_adap_vdev *adap, uint8_t slot, uint8_t func)
 {
-	return;
-
 	int i;
+
+	/*hardcode pci bus to 0, i2c bus to 6*/
+	if (!adap->adap_add) {
+		I2C_ADAPTER(slot, func, 0, 6);
+		adap->adap_add = true;
+		DPRINTF(("add adapter on pci0:%x.%x i2c6", slot, func));
+	}
+
 	for (i = 0; i< 128; i++) {
 		if (!adap->i2cdev_enable[i])
 			continue;
 		DPRINTF(("before add dsdt for 0x%x slot=%x  func=%x\n", i, slot, func));
-		dsdt_line("Device (I2C6)");
-		dsdt_line("{");
-		dsdt_line("    Name (_ADR, 0x%04X%04X)", slot, func);
-		dsdt_line("    Name (_DDN, \"Intel(R) I2C Controller #6\")");
-		dsdt_line("    Name (_UID, One)  // _UID: Unique ID");
-		dsdt_line("    Name (LINK, \"\\\\_SB.PCI0.I2C6\")");
-	
-		dsdt_line("    Name (RBUF, ResourceTemplate ()");
-		dsdt_line("    {");
-		dsdt_line("    })");
-		dsdt_line("    Name (IC4S, 0x00061A80)");
-		dsdt_line("    Name (_DSD, Package (0x02)");
-		dsdt_line("    {");
-		dsdt_line("        ToUUID (\"daffd814-6eba-4d8c-8a91-bc9bbf4aa301\")"
-					" ,");
-		dsdt_line("        Package (0x01)");
-		dsdt_line("        {");
-		dsdt_line("            Package (0x02)");
-		dsdt_line("            {");
-		dsdt_line("                \"clock-frequency\", ");
-		dsdt_line("                IC4S");
-		dsdt_line("            }");
-		dsdt_line("        }");
-		dsdt_line("    })");
-		dsdt_line("    Method (FMCN, 0, Serialized)");
-		dsdt_line("    {");
-		dsdt_line("        Name (PKG, Package (0x03)");
-		dsdt_line("        {");
-		dsdt_line("            0x64, ");
-		dsdt_line("            0xD6, ");
-		dsdt_line("            0x1C");
-		dsdt_line("        })");
-		dsdt_line("        Return (PKG)");
-		dsdt_line("    }");
-		dsdt_line("");
-		dsdt_line("    Method (FPCN, 0, Serialized)");
-		dsdt_line("    {");
-		dsdt_line("        Name (PKG, Package (0x03)");
-		dsdt_line("        {");
-		dsdt_line("            0x26, ");
-		dsdt_line("            0x50, ");
-		dsdt_line("            0x0C");
-		dsdt_line("        })");
-		dsdt_line("        Return (PKG)");
-		dsdt_line("    }");
-		dsdt_line("");
-		dsdt_line("    Method (HSCN, 0, Serialized)");
-		dsdt_line("    {");
-		dsdt_line("        Name (PKG, Package (0x03)");
-		dsdt_line("        {");
-		dsdt_line("            0x05, ");
-		dsdt_line("            0x18, ");
-		dsdt_line("            0x0C");
-		dsdt_line("        })");
-		dsdt_line("        Return (PKG)");
-		dsdt_line("    }");
-		dsdt_line("");
-		dsdt_line("    Method (SSCN, 0, Serialized)");
-		dsdt_line("    {");
-		dsdt_line("        Name (PKG, Package (0x03)");
-		dsdt_line("        {");
-		dsdt_line("            0x0244, ");
-		dsdt_line("            0x02DA, ");
-		dsdt_line("            0x1C");
-		dsdt_line("        })");
-		dsdt_line("        Return (PKG)");
-		dsdt_line("    }");
-		dsdt_line("");
-		dsdt_line("    Method (_CRS, 0, NotSerialized)");
-		dsdt_line("    {");
-		dsdt_line("        Return (RBUF)");
-		dsdt_line("    }");
-	
-		dsdt_line("    Device (HDAC)");
-		dsdt_line("    {");
-		dsdt_line("        Name (_HID, \"INT34C3\")  // _HID: Hardware ID");
-		dsdt_line("        Name (_CID, \"INT34C3\")  // _CID: Compatible ID");
-		dsdt_line("        Name (_DDN, \"Intel(R) Smart Sound Technology "
-				"Audio Codec\")  // _DDN: DOS Device Name");
-		dsdt_line("        Name (_UID, One)  // _UID: Unique ID");
-		dsdt_line("        Method (_INI, 0, NotSerialized)");
-		dsdt_line("        {");
-		dsdt_line("        }");
-		dsdt_line("");
-		dsdt_line("        Method (_CRS, 0, NotSerialized)");
-		dsdt_line("        {");
-		dsdt_line("            Name (SBFB, ResourceTemplate ()");
-		dsdt_line("            {");
-		dsdt_line("                I2cSerialBusV2 (0x006C, "
-						"ControllerInitiated, 0x00061A80,");
-		dsdt_line("                    AddressingMode7Bit, "
-							"\"\\\\_SB.PCI0.I2C6\",");
-		dsdt_line("                    0x00, ResourceConsumer, , Exclusive,");
-		dsdt_line("                    )");
-		dsdt_line("            })");
-		dsdt_line("            Name (SBFI, ResourceTemplate ()");
-		dsdt_line("            {");
-		dsdt_line("            })");
-		dsdt_line("            Return (ConcatenateResTemplate (SBFB, SBFI))");
-		dsdt_line("        }");
-		dsdt_line("");
-		dsdt_line("        Method (_STA, 0, NotSerialized)  // _STA: Status");
-		dsdt_line("        {");
-		dsdt_line("            Return (0x0F)");
-		dsdt_line("        }");
-		dsdt_line("    }");
-		dsdt_line("");
-		dsdt_line("}");
-		printf("after dsdt\n");
-
+		/*hardcode i2c bus to 6*/
+		if (i == 0x1C) {
+			I2C_HDAC(0, 6);
+			DPRINTF(("add HDAC on pci0.i2c6"));
+		} else if(i == 0x70) {
+			I2C_CAM1(0, 6);
+			DPRINTF(("add CAM1 on pci0.i2c6"));
+		} else if(i == 0x71) {
+			I2C_CAM2(0, 6);
+			DPRINTF(("add CAM2 on pci0.i2c6"));
+		} else
+			continue;
 	}
 }
 
 struct i2c_adap_vdev *
 i2c_adap_open(const char *optstr)
 {
-	char *nopt, *xopts, *cp;
-	uint16_t slave_addr;
+	char *nopt, *xopts, *cp, *t;
+	uint16_t slave_addr[128];
+	int i, total;
 	struct i2c_adap_vdev *adap;
 	int fd;
 	int tmp;
 
-	slave_addr = 0;
 	nopt = xopts = strdup(optstr);
 	printf("optstr = %s \n", optstr);
 	if (!nopt) {
@@ -217,11 +125,18 @@ i2c_adap_open(const char *optstr)
 			continue;
 		else if (!strncmp(cp, "slave", strlen("slave"))) {
 			printf("slave cp=%s\n",cp);
+			i = 0;
 			strsep(&cp, "=");
-			if (cp != NULL) {
-				dm_strtoi(cp, NULL, 16, &tmp);
-				slave_addr = (uint16_t)(tmp & 0x7F); 
+			while (cp != NULL && *cp !='\0') {
+				if (*cp == ':') cp++;
+				dm_strtoi(cp, &t, 16, &tmp);
+				slave_addr[i++] = (uint16_t)(tmp & 0x7F); 
+				if (t == cp)
+					break;
+				else
+					cp = t;
 			}
+			total = i;
 		}
 		else
 			WPRINTF(("not support options\n"));
@@ -242,14 +157,15 @@ i2c_adap_open(const char *optstr)
 	
 	printf("after alloc\n");
 	adap->fd = fd;
-	printf("addr=%d \n", slave_addr);
-	if (slave_addr > 0 && slave_addr < 128) {
-		adap->i2cdev_enable[slave_addr] = 1;
-
-		printf("after add dsdt\n");
-	} else {
-		WPRINTF(("slave_addr > 128, not support\n"));
-		goto err;
+	adap->adap_add = false;
+	for (i = 0; i < total; i++) {
+		if (slave_addr[i] > 0 && slave_addr[i] < 128) {
+			adap->i2cdev_enable[slave_addr[i]] = 1;
+			DPRINTF(("add slave 0x%x\n", slave_addr[i]));
+		} else {
+			WPRINTF(("slave_addr > 128, not support\n"));
+			goto err;
+		}
 	}
 	return adap;
 

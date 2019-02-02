@@ -32,6 +32,7 @@
 
 #include "types.h"
 #include <stdbool.h>
+#include <sys/queue.h>
 
 #define MAX_I2c_VDEV		128
 
@@ -264,13 +265,27 @@
 	} while (0)
 
 
+struct i2c_adap_msg {
+	TAILQ_ENTRY(i2c_adap_msg) link;
+	struct	i2c_msg msg;
+	void 	*params;
+	void 	(*callback)(struct i2c_adap_msg *iamsg, uint8_t status);
+};
+
+#define MAX_MSG_NUM 32
 struct i2c_adap_vdev {
 	int		fd;
 	int		i2cdev_enable[MAX_I2c_VDEV];
 	bool		adap_add;
+	pthread_t	tid;
+	pthread_mutex_t	mtx;
+	pthread_cond_t	cond;
+	TAILQ_HEAD(, i2c_adap_msg) msg_queue;
+	bool		closing;
 };
 
 struct i2c_adap_vdev *i2c_adap_open(const char *optstr);
-uint8_t i2c_adap_process(struct i2c_adap_vdev *adap, uint16_t addr, struct i2c_rdwr_ioctl_data *work_queue);
+void i2c_adap_queue_msg(struct i2c_adap_vdev *adap, struct i2c_adap_msg *imsg);
 void i2c_vdev_add_dsdt(struct i2c_adap_vdev *adap, uint8_t slot, uint8_t func);
+int i2c_adap_close(struct i2c_adap_vdev *adap);
 #endif

@@ -39,6 +39,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <pthread.h>
+#include <signal.h>
 #include <linux/i2c-dev.h> 
 #include <linux/i2c.h> 
 
@@ -56,20 +58,35 @@ static int i2c_debug=1;
 #define I2C_MSG_ERR	1
 #define I2C_NO_DEV	2
 
-uint8_t
-i2c_adap_process(struct i2c_adap_vdev *adap, uint16_t addr, struct i2c_rdwr_ioctl_data *work_queue)
+static void
+i2c_adap_process(struct i2c_adap_vdev *adap, struct i2c_adap_msg *imsg)
 {
 	int ret;
+	uint16_t addr;
+	struct i2c_msg *msg;
+	struct i2c_rdwr_ioctl_data work_queue;
+	uint8_t status;
 
-	if (!adap->i2cdev_enable[addr])
-		return I2C_NO_DEV;
+	msg = &imsg->msg;
+	addr = msg->addr;
+	if (!adap->i2cdev_enable[addr]) {
+		status = I2C_NO_DEV;
+		goto done;
+	}
+		
+
+	work_queue.nmsgs = 1;
+	work_queue.msgs = msg;
 
 	DPRINTF(("i2c_adap_process for addr=0x%x\n", addr));
 	ret = ioctl(adap->fd, I2C_RDWR, work_queue);
 	if (ret < 0)
-		return I2C_MSG_ERR;
+		status = I2C_MSG_ERR;
 	else
-		return I2C_MSG_OK;
+		status = I2C_MSG_OK;
+done:
+	(*imsg->callback)(imsg, status);
+	return;
 }
 
 void
@@ -101,6 +118,38 @@ i2c_vdev_add_dsdt(struct i2c_adap_vdev *adap, uint8_t slot, uint8_t func)
 		} else
 			continue;
 	}
+}
+
+void
+i2c_adap_queue_msg(struct i2c_adap_vdev *adap, struct i2c_adap_msg *imsg)
+{
+	pthread_mutex_lock(&adap->mtx);
+	TAILQ_INSERT_TAIL(&adap->msg_queue, imsg, link);
+	pthread_mutex_unlock(&adap->mtx);
+	pthread_cond_signal(&adap->cond);
+}
+
+static void *
+i2c_adap_thr(void *arg)
+{
+	struct i2c_adap_msg *imsg;
+	struct i2c_adap_vdev *adap;
+
+	adap = arg;
+	for (;;) {
+		pthread_mutex_lock(&adap->mtx);
+		imsg = TAILQ_FIRST(&adap->msg_queue);
+		pthread_mutex_unlock(&adap->mtx);
+		if (imsg) {
+			i2c_adap_process(adap, imsg);
+		}
+		if (adap->closing)
+			break;
+		pthread_cond_wait(&adap->cond, &adap->mtx);
+	}
+	pthread_exit(NULL);
+
+	return NULL;
 }
 
 struct i2c_adap_vdev *
@@ -158,6 +207,13 @@ i2c_adap_open(const char *optstr)
 	printf("after alloc\n");
 	adap->fd = fd;
 	adap->adap_add = false;
+	adap->closing = false;
+	pthread_mutex_init(&adap->mtx, NULL);
+	pthread_cond_init(&adap->cond, NULL);
+	TAILQ_INIT(&adap->msg_queue);
+
+	pthread_create(&adap->tid, NULL, i2c_adap_thr, adap);
+
 	for (i = 0; i < total; i++) {
 		if (slave_addr[i] > 0 && slave_addr[i] < 128) {
 			adap->i2cdev_enable[slave_addr[i]] = 1;
@@ -175,4 +231,21 @@ err:
 	return NULL;
 
 
+}
+
+int
+i2c_adap_close(struct i2c_adap_vdev *adap)
+{
+	void *jval;
+
+	pthread_mutex_lock(&adap->mtx);
+	adap->closing = 1;
+	pthread_mutex_unlock(&adap->mtx);
+	pthread_cond_broadcast(&adap->cond);
+	pthread_join(adap->tid, &jval);
+
+	close(adap->fd);
+	free(adap);
+
+	return 0;
 }

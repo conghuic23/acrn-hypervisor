@@ -52,6 +52,7 @@ static int virtio_i2c_debug=1;
 
 struct virtio_i2cadap_msg {
 	struct virtio_i2cadap *i2cadap;
+	struct i2c_adap_msg imsg;
 	uint8_t *status;
 	uint16_t idx;
 };
@@ -99,15 +100,29 @@ virtio_i2cadap_reset(void *vdev)
 }
 
 static void
+virtio_i2cadap_done(struct i2c_adap_msg *imsg, uint8_t status)
+{
+	struct virtio_i2cadap_msg *vmsg = imsg->params;
+	struct virtio_i2cadap *i2cadap = vmsg->i2cadap;
+	int idx = vmsg->idx;
+
+	*vmsg->status = status;
+	pthread_mutex_lock(&i2cadap->mtx);
+	vq_relchain(&i2cadap->vq, idx, 1);
+	vq_endchains(&i2cadap->vq, 0);
+	pthread_mutex_lock(&i2cadap->mtx);
+}
+
+static void
 virtio_i2cadap_proc(struct virtio_i2cadap *i2cadap, struct virtio_vq_info *vq)
 {
 	struct iovec iov[3];
 	uint16_t idx, flags[3];
 	struct virtio_i2c_outhdr *hdr;
-	struct i2c_msg msg;
-	struct i2c_rdwr_ioctl_data work_queue;
-	char *status;
+	struct i2c_adap_msg *imsg;
+	struct i2c_msg *msg;
 	int n;
+
 	DPRINTF(("virtio_i2cadap_proc enter\n"));
 	n = vq_getchain(vq, &idx, iov, 3, flags);
 	if (n < 2 || n >3)
@@ -118,37 +133,35 @@ virtio_i2cadap_proc(struct virtio_i2cadap *i2cadap, struct virtio_vq_info *vq)
 
 	hdr = iov[0].iov_base;
 	// add assert here!!!!
-	msg.addr = hdr->addr;
-	msg.flags = hdr->flags;
+	imsg = &i2cadap->msgs[idx].imsg;
+	msg = &imsg->msg;
+	msg->addr = hdr->addr;
+	msg->flags = hdr->flags;
+
 	if (hdr->len) {
-		msg.buf = iov[1].iov_base;
-		msg.len = iov[1].iov_len;
-		status = iov[2].iov_base;
+		msg->buf = iov[1].iov_base;
+		msg->len = iov[1].iov_len;
+		i2cadap->msgs[idx].status = iov[2].iov_base;
 	} else {
-		msg.buf = NULL;
-		msg.len = 0;
-		status = iov[1].iov_base;
+		msg->buf = NULL;
+		msg->len = 0;
+		i2cadap->msgs[idx].status = iov[2].iov_base;
 	}
 
-	work_queue.nmsgs = 1;
-	work_queue.msgs = &msg;
-	*status = i2c_adap_process(i2cadap->adap, msg.addr, &work_queue);
+	i2c_adap_queue_msg(i2cadap->adap, imsg);
 
-	if (msg.len)
+	if (msg->len)
 		DPRINTF(("@@@@ after i2c msg: flags=0x%x, addr=0x%x, len=0x%x buf=%x\n",
-				msg.flags,
-				msg.addr,
-				msg.len,
-				msg.buf[0]));
+				msg->flags,
+				msg->addr,
+				msg->len,
+				msg->buf[0]));
 	else
 		DPRINTF(("@@@@ after i2c msg: flags=0x%x, addr=0x%x, len=0x%x\n",
-				msg.flags,
-				msg.addr,
-				msg.len));
+				msg->flags,
+				msg->addr,
+				msg->len));
 
-	pthread_mutex_lock(&i2cadap->mtx);
-	vq_relchain(vq, idx, 1);
-	pthread_mutex_lock(&i2cadap->mtx);
 }
 
 static void
@@ -198,8 +211,10 @@ virtio_i2cadap_init(struct vmctx *ctx, struct pci_vdev *dev, char *opts)
 		struct virtio_i2cadap_msg *msg = &i2cadap->msgs[i];
 		msg->i2cadap = i2cadap;
 		msg->idx = i;
-	}
+		msg->imsg.callback = virtio_i2cadap_done;
+		msg->imsg.params = msg;
 
+	}
 	DPRINTF(("virtio_i2cadap_init enter 2 \n"));
 	/* init mutex attribute properly to avoid deadlock */
 	rc = pthread_mutexattr_init(&attr);
@@ -268,6 +283,7 @@ virtio_i2cadap_deinit(struct vmctx *ctx, struct pci_vdev *dev, char *opts)
 	if (dev->arg) {
 		DPRINTF(("virtio_i2cadap: deinit\n"));
 		i2cadap = (struct virtio_i2cadap *) dev->arg;
+		i2c_adap_close(i2cadap->adap);
 		free(i2cadap);
 	}
 }

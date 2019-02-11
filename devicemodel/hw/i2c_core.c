@@ -78,12 +78,25 @@ i2c_adap_process(struct i2c_adap_vdev *adap, struct i2c_adap_msg *imsg)
 	work_queue.nmsgs = 1;
 	work_queue.msgs = msg;
 
-	DPRINTF(("i2c_adap_process for addr=0x%x\n", addr));
-	ret = ioctl(adap->fd, I2C_RDWR, work_queue);
+	DPRINTF(("i2c_adap_process for addr=0x%x fd=%d\n", addr, adap->fd));
+	ret = ioctl(adap->fd, I2C_RDWR, &work_queue);
+	printf("ret=%d",ret);
 	if (ret < 0)
 		status = I2C_MSG_ERR;
 	else
 		status = I2C_MSG_OK;
+	if (msg->len)
+		DPRINTF(("@@@@ after i2c msg: flags=0x%x, addr=0x%x, len=0x%x buf=%x\n",
+				msg->flags,
+				msg->addr,
+				msg->len,
+				msg->buf[0]));
+	else
+		DPRINTF(("@@@@ after i2c msg: flags=0x%x, addr=0x%x, len=0x%x\n",
+				msg->flags,
+				msg->addr,
+				msg->len));
+
 done:
 	(*imsg->callback)(imsg, status);
 	return;
@@ -127,6 +140,7 @@ i2c_adap_queue_msg(struct i2c_adap_vdev *adap, struct i2c_adap_msg *imsg)
 	TAILQ_INSERT_TAIL(&adap->msg_queue, imsg, link);
 	pthread_mutex_unlock(&adap->mtx);
 	pthread_cond_signal(&adap->cond);
+	DPRINTF(("signal adap to process queue\n"));
 }
 
 static void *
@@ -135,18 +149,27 @@ i2c_adap_thr(void *arg)
 	struct i2c_adap_msg *imsg;
 	struct i2c_adap_vdev *adap;
 
+	DPRINTF(("!!!!!!!!!!!!!!!!!!!!!!i2c thread created\n"));
 	adap = arg;
+	pthread_mutex_lock(&adap->mtx);
 	for (;;) {
-		pthread_mutex_lock(&adap->mtx);
+		DPRINTF(("!!!!!!!!!!!!!!!!!!!!!! imsg is %p", imsg));
 		imsg = TAILQ_FIRST(&adap->msg_queue);
-		pthread_mutex_unlock(&adap->mtx);
+		DPRINTF(("2 !!!!!!!!!!!!!!!!!!!!!! imsg is %p", imsg));
 		if (imsg) {
+			pthread_mutex_unlock(&adap->mtx);
 			i2c_adap_process(adap, imsg);
+			pthread_mutex_lock(&adap->mtx);
 		}
 		if (adap->closing)
 			break;
+
+		DPRINTF(("before wait!!!!!!!!!!"));
 		pthread_cond_wait(&adap->cond, &adap->mtx);
+		DPRINTF(("after wait!!!!!!!!!!"));
 	}
+
+	pthread_mutex_unlock(&adap->mtx);
 	pthread_exit(NULL);
 
 	return NULL;
@@ -204,7 +227,7 @@ i2c_adap_open(const char *optstr)
 		goto err;
 	}
 	
-	printf("after alloc\n");
+	printf("after alloc fd=%d \n",fd);
 	adap->fd = fd;
 	adap->adap_add = false;
 	adap->closing = false;
@@ -213,6 +236,7 @@ i2c_adap_open(const char *optstr)
 	TAILQ_INIT(&adap->msg_queue);
 
 	pthread_create(&adap->tid, NULL, i2c_adap_thr, adap);
+	pthread_setname_np(adap->tid, "virtio-i2c-adapter");
 
 	for (i = 0; i < total; i++) {
 		if (slave_addr[i] > 0 && slave_addr[i] < 128) {

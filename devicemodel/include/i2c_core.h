@@ -39,10 +39,10 @@
 /*i2c device acpi desc*/
 #define I2C_ADAPTER(slot, func, pci_bus, i2c_bus)					\
 	do {										\
-		dsdt_line("Device (I2C6)");						\
+		dsdt_line("Device (I2C%d)",i2c_bus);					\
 		dsdt_line("{");								\
 		dsdt_line("    Name (_ADR, 0x%04X%04X)", slot, func);			\
-		dsdt_line("    Name (_DDN, \"Intel(R) I2C Controller #6\")");		\
+		dsdt_line("    Name (_DDN, \"Intel(R) I2C Controller #%d\")", i2c_bus);	\
 		dsdt_line("    Name (_UID, One)");					\
 		dsdt_line("    Name (LINK, \"\\\\_SB.PCI%d.I2C%d\")",			\
 						pci_bus, i2c_bus);			\
@@ -276,6 +276,7 @@ struct i2c_adap_msg {
 struct i2c_adap_vdev {
 	int		fd;
 	int		i2cdev_enable[MAX_I2c_VDEV];
+	int		bus;
 	bool		adap_add;
 	pthread_t	tid;
 	pthread_mutex_t	mtx;

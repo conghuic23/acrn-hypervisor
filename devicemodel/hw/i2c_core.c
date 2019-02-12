@@ -106,31 +106,45 @@ void
 i2c_vdev_add_dsdt(struct i2c_adap_vdev *adap, uint8_t slot, uint8_t func)
 {
 	int i;
+	int i2c_bus;
 
-	/*hardcode pci bus to 0, i2c bus to 6*/
+	i2c_bus = adap->bus;
 	if (!adap->adap_add) {
-		I2C_ADAPTER(slot, func, 0, 6);
+		I2C_ADAPTER(slot, func, 0, i2c_bus);
 		adap->adap_add = true;
-		DPRINTF(("add adapter on pci0:%x.%x i2c6", slot, func));
+		DPRINTF(("add adapter on pci0:%x.%x i2c%d", slot, func, i2c_bus));
 	}
 
 	for (i = 0; i< 128; i++) {
 		if (!adap->i2cdev_enable[i])
 			continue;
 		DPRINTF(("before add dsdt for 0x%x slot=%x  func=%x\n", i, slot, func));
-		/*hardcode i2c bus to 6*/
 		if (i == 0x1C) {
-			I2C_HDAC(0, 6);
-			DPRINTF(("add HDAC on pci0.i2c6"));
+			I2C_HDAC(0, i2c_bus);
+			DPRINTF(("add HDAC on pci0.i2c%d",i2c_bus));
 		} else if(i == 0x70) {
-			I2C_CAM1(0, 6);
-			DPRINTF(("add CAM1 on pci0.i2c6"));
+			I2C_CAM1(0, i2c_bus);
+			DPRINTF(("add CAM1 on pci0.i2c%d",i2c_bus));
 		} else if(i == 0x71) {
-			I2C_CAM2(0, 6);
-			DPRINTF(("add CAM2 on pci0.i2c6"));
+			I2C_CAM2(0, i2c_bus);
+			DPRINTF(("add CAM2 on pci0.i2c%d",i2c_bus));
 		} else
 			continue;
 	}
+}
+
+static bool
+i2c_vdev_slave_access_ok(struct i2c_adap_vdev *adap, uint16_t addr)
+{
+	if (ioctl(adap->fd, I2C_SLAVE, addr) < 0) {
+		if (errno == EBUSY) {
+			WPRINTF(("Slave device %x is busy!\n", addr));
+		} else {
+			WPRINTF(("Slave device %d is not exsit!\n", addr));
+		}
+		return false;
+	}
+	return true;
 }
 
 void
@@ -149,13 +163,10 @@ i2c_adap_thr(void *arg)
 	struct i2c_adap_msg *imsg;
 	struct i2c_adap_vdev *adap;
 
-	DPRINTF(("!!!!!!!!!!!!!!!!!!!!!!i2c thread created\n"));
 	adap = arg;
 	pthread_mutex_lock(&adap->mtx);
 	for (;;) {
-		DPRINTF(("!!!!!!!!!!!!!!!!!!!!!! imsg is %p", imsg));
 		imsg = TAILQ_FIRST(&adap->msg_queue);
-		DPRINTF(("2 !!!!!!!!!!!!!!!!!!!!!! imsg is %p", imsg));
 		if (imsg) {
 			pthread_mutex_unlock(&adap->mtx);
 			i2c_adap_process(adap, imsg);
@@ -164,9 +175,7 @@ i2c_adap_thr(void *arg)
 		if (adap->closing)
 			break;
 
-		DPRINTF(("before wait!!!!!!!!!!"));
 		pthread_cond_wait(&adap->cond, &adap->mtx);
-		DPRINTF(("after wait!!!!!!!!!!"));
 	}
 
 	pthread_mutex_unlock(&adap->mtx);
@@ -184,6 +193,7 @@ i2c_adap_open(const char *optstr)
 	struct i2c_adap_vdev *adap;
 	int fd;
 	int tmp;
+	int bus;
 
 	nopt = xopts = strdup(optstr);
 	printf("optstr = %s \n", optstr);
@@ -195,7 +205,16 @@ i2c_adap_open(const char *optstr)
 		cp = strsep(&xopts, ",");
 		if (cp == nopt)
 			continue;
-		else if (!strncmp(cp, "slave", strlen("slave"))) {
+		else if (!strncmp(cp, "bus", strlen("bus"))) {
+			strsep(&cp, "=");
+			if (cp != NULL)
+				dm_strtoi(cp, &t, 10, &bus);
+			else {
+				WPRINTF(("bus is not correct for i2c adapter, please check!"));
+				return NULL;
+			}
+			DPRINTF(("i2c adapter bus is %d\n", bus));
+		} else if (!strncmp(cp, "slave", strlen("slave"))) {
 			printf("slave cp=%s\n",cp);
 			i = 0;
 			strsep(&cp, "=");
@@ -240,13 +259,16 @@ i2c_adap_open(const char *optstr)
 
 	for (i = 0; i < total; i++) {
 		if (slave_addr[i] > 0 && slave_addr[i] < 128) {
-			adap->i2cdev_enable[slave_addr[i]] = 1;
-			DPRINTF(("add slave 0x%x\n", slave_addr[i]));
+			if (i2c_vdev_slave_access_ok(adap, slave_addr[i])) {
+				adap->i2cdev_enable[slave_addr[i]] = 1;
+				DPRINTF(("add slave 0x%x\n", slave_addr[i]));
+			}
 		} else {
 			WPRINTF(("slave_addr > 128, not support\n"));
 			goto err;
 		}
 	}
+	adap->bus = bus;
 	return adap;
 
 err:

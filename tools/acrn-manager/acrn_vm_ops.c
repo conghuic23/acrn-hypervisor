@@ -477,3 +477,69 @@ int resume_vm(const char *vmname, unsigned reason)
 
 	return ack.data.err;
 }
+
+int trace_vm(const char *vmname)
+{
+    struct mngr_msg req;
+    struct mngr_msg ack;
+    char *buffer_line;
+    size_t ptr = 0;
+
+    req.magic = MNGR_MSG_MAGIC;
+    req.msgid = DM_TRACE;
+    req.timestamp = time(NULL);
+
+    send_msg(vmname, &req, &ack);
+
+    if (ack.data.err == 0) {
+        printf("Unable to flush vm. errno(%d)\n", ack.data.err);
+    } else {
+        buffer_line = calloc(1, ack.data.acrnd_trace.width);
+        while(ptr != ack.data.acrnd_trace.depth) {
+            memcpy(buffer_line,
+                ack.data.acrnd_trace.buffer + ptr * ack.data.acrnd_trace.width,
+                ack.data.acrnd_trace.width);
+            printf("%s\r", buffer_line);
+            ptr++;
+        }
+        free(buffer_line);
+    }
+
+    return ack.data.err;
+}
+
+int flush_vm(const char *vmname)
+{
+    struct mngr_msg req;
+    struct mngr_msg ack;
+
+    req.magic = MNGR_MSG_MAGIC;
+    req.msgid = DM_FLUSH;
+    req.timestamp = time(NULL);
+
+    send_msg(vmname, &req, &ack);
+
+    if (ack.data.err) {
+        printf("Unable to flush vm. errno(%d)\n", ack.data.err);
+    }
+
+    return ack.data.err;
+}
+
+int clear_vm(const char *vmname)
+{
+    struct mngr_msg req;
+    struct mngr_msg ack;
+
+    req.magic = MNGR_MSG_MAGIC;
+    req.msgid = DM_CLEAR;
+    req.timestamp = time(NULL);
+
+    send_msg(vmname, &req, &ack);
+
+    if (ack.data.err) {
+        printf("Unable to flush vm. errno(%d)\n", ack.data.err);
+    }
+
+    return ack.data.err;
+}

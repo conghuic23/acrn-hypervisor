@@ -42,6 +42,7 @@
 #include "vmm.h"
 #include "mem.h"
 #include "tree.h"
+#include "trace.h"
 
 struct mmio_rb_range {
 	RB_ENTRY(mmio_rb_range)	mr_link;	/* RB tree links */
@@ -186,14 +187,14 @@ emulate_mem(struct vmctx *ctx, struct mmio_request *mmio_req)
 	if (entry->enabled == false) {
 		return -1;
 	}
-
+	dm_debug("emulate_mem enter name=%s directtion=%d paddr=%lx base=%lx\n",entry->mr_param.name,mmio_req->direction, paddr, entry->mr_param.base);
 	if (mmio_req->direction == REQUEST_READ)
 		err = mem_read(ctx, 0, paddr, (uint64_t *)&mmio_req->value,
 				size, &entry->mr_param);
 	else
 		err = mem_write(ctx, 0, paddr, mmio_req->value,
 				size, &entry->mr_param);
-
+	dm_debug("emulate_mem exit name=%s\n",entry->mr_param.name);
 	pthread_rwlock_unlock(&mmio_rwlock);
 
 	return err;

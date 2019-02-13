@@ -403,6 +403,7 @@ struct pci_xhci_vdev {
 	sem_t		vbdp_sem;
 	bool		vbdp_polling;
 	int		vbdp_dev_num;
+	int		delay_enum;
 	struct pci_xhci_vbdp_dev_state vbdp_devs[XHCI_MAX_VIRT_PORTS];
 
 	/*
@@ -528,7 +529,7 @@ static void pci_xhci_reset_role(void)
 	if (rc)
 		UPRINTF(LFTL, "drd 2 native interface write failure %d\r\n", rc);
 
-	usleep(100000);
+	//usleep(100000);
 
 	rc = write(fd, "device", 6);
 	if (rc != 6)
@@ -742,8 +743,12 @@ xhci_vbdp_thread(void *data)
 	assert(xdev);
 
 	while (xdev->vbdp_polling) {
-
 		sem_wait(&xdev->vbdp_sem);
+		if (xdev->delay_enum == 1) {
+			xdev->delay_enum = 0;
+			sleep(10);
+		}
+
 		for (i = 0; i < XHCI_MAX_VIRT_PORTS; ++i)
 			if (xdev->vbdp_devs[i].state == S3_VBDP_END) {
 				xdev->vbdp_devs[i].state = S3_VBDP_NONE;
@@ -1248,6 +1253,7 @@ pci_xhci_usbcmd_write(struct pci_xhci_vdev *xdev, uint32_t cmd)
 		 * and under that situation, the vbdp_devs and se_dev_num
 		 * should also need to be cleared
 		 */
+		xdev->delay_enum = 1;
 		xdev->vbdp_dev_num = 0;
 		memset(xdev->vbdp_devs, 0, sizeof(xdev->vbdp_devs));
 
@@ -4204,6 +4210,7 @@ pci_xhci_init(struct vmctx *ctx, struct pci_vdev *dev, char *opts)
 	pthread_mutex_init(&xdev->mtx, NULL);
 
 	/* create vbdp_thread */
+	xdev->delay_enum = 0;
 	xdev->vbdp_polling = true;
 	sem_init(&xdev->vbdp_sem, 0, 0);
 	error = pthread_create(&xdev->vbdp_thread, NULL, xhci_vbdp_thread,

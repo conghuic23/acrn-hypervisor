@@ -32,6 +32,7 @@
 #include <assert.h>
 
 #include "inout.h"
+#include "trace.h"
 
 SET_DECLARE(inout_port_set, struct inout_port);
 
@@ -103,7 +104,6 @@ emulate_inout(struct vmctx *ctx, int *pvcpu, struct pio_request *pio_request)
 
 	assert(port + bytes - 1 < MAX_IOPORTS);
 	assert(bytes == 1 || bytes == 2 || bytes == 4);
-
 	handler = inout_handlers[port].handler;
 	flags = inout_handlers[port].flags;
 	arg = inout_handlers[port].arg;
@@ -120,8 +120,11 @@ emulate_inout(struct vmctx *ctx, int *pvcpu, struct pio_request *pio_request)
 		return -1;
 	}
 
+	dm_debug("emulate_inout enter name=%s port=%d\n", inout_handlers[port].name,port);
 	retval = handler(ctx, *pvcpu, in, port, bytes,
 		(uint32_t *)&(pio_request->value), arg);
+	
+	dm_debug("emulate_inout exit name=%s port=%d\n", inout_handlers[port].name,port);
 	return retval;
 }
 

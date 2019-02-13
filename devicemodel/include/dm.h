@@ -34,6 +34,7 @@
 #include "vmm.h"
 #include "dm_string.h"
 #include "dm_kmsg.h"
+#include "trace.h"
 
 struct vmctx;
 extern int guest_ncpus;

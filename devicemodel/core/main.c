@@ -66,6 +66,7 @@
 #include "vmcfg.h"
 #include "tpm.h"
 #include "virtio.h"
+#include "trace.h"
 
 #define GUEST_NIO_PORT		0x488	/* guest upcalls via i/o port */
 
@@ -162,7 +163,6 @@ usage(int code)
 		"       --enable_trusty: enable trusty for guest\n"
 		"       --ptdev_no_reset: disable reset check for ptdev\n"
 		"       --debugexit: enable debug exit function\n"
-		"       --intr_monitor: enable interrupt storm monitor\n"
 		"       --vtpm2: Virtual TPM2 args: sock_path=$PATH_OF_SWTPM_SOCKET\n"
 		"............its params: threshold/s,probe-period(s),delay_time(ms),delay_duration(ms)\n",
 		progname, (int)strnlen(progname, PATH_MAX), "", (int)strnlen(progname, PATH_MAX), "",
@@ -326,8 +326,8 @@ vmexit_inout(struct vmctx *ctx, struct vhm_request *vhm_req, int *pvcpu)
 	port = vhm_req->reqs.pio_request.address;
 	bytes = vhm_req->reqs.pio_request.size;
 	in = (vhm_req->reqs.pio_request.direction == REQUEST_READ);
-
 	error = emulate_inout(ctx, pvcpu, &vhm_req->reqs.pio_request);
+
 	if (error) {
 		fprintf(stderr, "Unhandled %s%c 0x%04x\n",
 				in ? "in" : "out",
@@ -693,7 +693,6 @@ enum {
 	CMD_OPT_DEBUGEXIT,
 	CMD_OPT_VMCFG,
 	CMD_OPT_DUMP,
-	CMD_OPT_INTR_MONITOR,
 	CMD_OPT_VTPM2,
 };
 
@@ -705,13 +704,15 @@ static struct option long_options[] = {
 	{"ioc_node",		required_argument,	0, 'i' },
 	{"lpc",			required_argument,	0, 'l' },
 	{"pci_slot",		required_argument,	0, 's' },
-	{"memsize",		required_argument,	0, 'm' },
+    {"memsize",		required_argument,	0, 'm' },
+    {"tracesize",   required_argument,  0, 't'},
 	{"uuid",		required_argument,	0, 'U' },
 	{"virtio_msix",		no_argument,		0, 'W' },
 	{"mptgen",		no_argument,		0, 'Y' },
 	{"kernel",		required_argument,	0, 'k' },
 	{"ramdisk",		required_argument,	0, 'r' },
-	{"bootargs",		required_argument,	0, 'B' },
+    {"tracesize",   required_argument,  0,  't'},
+    {"bootargs",		required_argument,	0, 'B' },
 	{"version",		no_argument,		0, 'v' },
 	{"gvtargs",		required_argument,	0, 'G' },
 	{"help",		no_argument,		0, 'h' },
@@ -731,12 +732,11 @@ static struct option long_options[] = {
 	{"ptdev_no_reset",	no_argument,		0,
 		CMD_OPT_PTDEV_NO_RESET},
 	{"debugexit",		no_argument,		0, CMD_OPT_DEBUGEXIT},
-	{"intr_monitor",	required_argument,	0, CMD_OPT_INTR_MONITOR},
 	{"vtpm2",		required_argument,	0, CMD_OPT_VTPM2},
 	{0,			0,			0,  0  },
 };
 
-static char optstr[] = "hAWYvE:k:r:B:p:c:s:m:l:U:G:i:";
+static char optstr[] = "hAWYvE:k:r:B:p:c:s:m:l:t:U:G:i:";
 
 int
 dm_run(int argc, char *argv[])
@@ -744,12 +744,13 @@ dm_run(int argc, char *argv[])
 	int c, error, err;
 	int max_vcpus, mptgen;
 	struct vmctx *ctx;
-	size_t memsize;
+	size_t memsize, tracesize;
 	int option_idx = 0;
 
 	progname = basename(argv[0]);
 	guest_ncpus = 1;
 	memsize = 256 * MB;
+    tracesize = 4 * MB;
 	mptgen = 1;
 
 	if (signal(SIGHUP, sig_handler_term) == SIG_ERR)
@@ -800,6 +801,11 @@ dm_run(int argc, char *argv[])
 			if (error)
 				errx(EX_USAGE, "invalid memsize '%s'", optarg);
 			break;
+        case 't':
+            error = vm_parse_tracesize(optarg, &tracesize);
+            if (error)
+                errx(EX_USAGE, "invalid tracesize '%s'", optarg);
+            break;
 		case 'U':
 			guest_uuid_str = optarg;
 			break;
@@ -882,12 +888,6 @@ dm_run(int argc, char *argv[])
 				exit(1);
 			}
 			break;
-		case CMD_OPT_INTR_MONITOR:
-			if (acrn_parse_intr_monitor(optarg) != 0) {
-				errx(EX_USAGE, "invalid intr-monitor params %s", optarg);
-				exit(1);
-			}
-			break;
 		case 'h':
 			usage(0);
 		default:
@@ -936,6 +936,12 @@ dm_run(int argc, char *argv[])
 			goto fail;
 		}
 		write_kmsg("%s vm_setup_memory end---\n", KMSG_FMT);
+
+        err = debug_buffer_init(tracesize);
+        if (err) {
+            fprintf(stderr, "Unable to setup trace buffer memory (%d)\n", errno);
+            goto fail;
+        }
 
 		err = mevent_init();
 		if (err) {
@@ -1010,7 +1016,8 @@ dm_run(int argc, char *argv[])
 		vm_deinit_vdevs(ctx);
 		mevent_deinit();
 		vm_unsetup_memory(ctx);
-		vm_destroy(ctx);
+		debug_buffer_close();
+        vm_destroy(ctx);
 		_ctx = 0;
 
 		vm_set_suspend_mode(VM_SUSPEND_NONE);
@@ -1033,6 +1040,7 @@ int main(int argc, char *argv[])
 	int option_idx = 0;
 	int dm_options = 0, vmcfg = 0;
 	int index = -1;
+
 
 	while ((c = getopt_long(argc, argv, optstr, long_options,
 			&option_idx)) != -1) {

@@ -258,6 +258,7 @@ struct pci_xhci_rtsregs {
 enum pci_xhci_vbdp_state {
 	S3_VBDP_NONE = 0,
 	S3_VBDP_START,
+	S3_VBDP_MID,
 	S3_VBDP_END
 };
 
@@ -750,7 +751,7 @@ xhci_vbdp_thread(void *data)
 		}
 
 		for (i = 0; i < XHCI_MAX_VIRT_PORTS; ++i)
-			if (xdev->vbdp_devs[i].state == S3_VBDP_END) {
+			if (xdev->vbdp_devs[i].state == S3_VBDP_MID) {
 				xdev->vbdp_devs[i].state = S3_VBDP_NONE;
 				break;
 			}
@@ -819,14 +820,17 @@ pci_xhci_native_usb_dev_conn_cb(void *hci_data, void *dev_data)
 	UPRINTF(LINF, "%04x:%04x %d-%s belong to this vm.\r\n", di->vid,
 			di->pid, di->path.bus, usb_dev_path(&di->path));
 
+	dm_debug("vbdp_dev_num=%d \n", xdev->vbdp_dev_num);
 	for (i = 0; xdev->vbdp_dev_num && i < XHCI_MAX_VIRT_PORTS; ++i) {
-		if (xdev->vbdp_devs[i].state != S3_VBDP_START)
+		dm_debug("xdev->vbdp_devs[i].state = %d\n", xdev->vbdp_devs[i].state);
+		if (!(xdev->vbdp_devs[i].state == S3_VBDP_START ||
+					xdev->vbdp_devs[i].state == S3_VBDP_MID))
 			continue;
-
 		if (!usb_dev_path_cmp(&di->path, &xdev->vbdp_devs[i].path))
 			continue;
 
 		s3_conn = 1;
+		xdev->vbdp_dev_num--;
 		vport = xdev->vbdp_devs[i].vport;
 		UPRINTF(LINF, "Skip and cache connect event for %d-%s\r\n",
 				di->path.bus, usb_dev_path(&di->path));
@@ -1869,8 +1873,10 @@ pci_xhci_cmd_disable_slot(struct pci_xhci_vdev *xdev, uint32_t slot)
 			if (!usb_dev_path_cmp(path, &di->path))
 				continue;
 
-			xdev->vbdp_devs[j].state = S3_VBDP_END;
+			xdev->vbdp_devs[j].state = S3_VBDP_MID;
+#if 0
 			xdev->vbdp_dev_num--;
+#endif
 			sem_post(&xdev->vbdp_sem);
 			UPRINTF(LINF, "signal device %d-%s to connect\r\n",
 					di->path.bus, usb_dev_path(&di->path));

@@ -351,18 +351,14 @@ int32_t create_vm(uint16_t vm_id, struct acrn_vm_config *vm_config, struct acrn_
 				register_pm1ab_handler(vm);
 			}
 
-			/* Create virtual uart; just when uart enabled, vuart can work */
-			if (is_dbg_uart_enabled()) {
-				vuart_init(vm);
-			}
 		}
 		vpic_init(vm);
 
-#ifdef CONFIG_PARTITION_MODE
 		/* Create virtual uart; just when uart enabled, vuart can work */
 		if (vm_config->vm_vuart && is_dbg_uart_enabled()) {
 			vuart_init(vm);
 		}
+#ifdef CONFIG_PARTITION_MODE
 		vrtc_init(vm);
 #endif
 

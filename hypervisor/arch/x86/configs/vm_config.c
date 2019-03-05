@@ -24,6 +24,7 @@ static struct acrn_vm_config vm_configs[CONFIG_MAX_VM_NUM] __aligned(PAGE_SIZE) 
 		.os_config = {
 			.name = SOS_VM_CONFIG_OS_NAME,
 		},
+		.vm_vuart = true,
 	},
 };
 #else

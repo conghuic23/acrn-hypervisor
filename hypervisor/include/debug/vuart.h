@@ -58,19 +58,16 @@ struct acrn_vuart {
 	struct fifo rxfifo;
 	struct fifo txfifo;
 	uint16_t base;
-#ifdef CONFIG_PARTITION_MODE
+	uint32_t irq; 
 	char vuart_rx_buf[RX_BUF_SIZE];
 	char vuart_tx_buf[TX_BUF_SIZE];
-#endif
 	bool thre_int_pending;	/* THRE interrupt pending */
 	bool active;
 	struct acrn_vm *vm;
 	spinlock_t lock;	/* protects all softc elements */
 };
 
-#ifdef CONFIG_PARTITION_MODE
 extern uint16_t vuart_vmid;
-#endif /* CONFIG_PARTITION_MODE */
 
 struct acrn_vuart *vm_vuart(struct acrn_vm *vm);
 void vuart_init(struct acrn_vm *vm);
@@ -78,6 +75,6 @@ struct acrn_vuart *vuart_console_active(void);
 void vuart_console_tx_chars(struct acrn_vuart *vu);
 void vuart_console_rx_chars(struct acrn_vuart *vu);
 
-bool hv_used_dbg_intx(uint32_t intx_pin);
+bool hv_used_dbg_intx(struct acrn_vm *vm, uint32_t intx_pin);
 void vuart_set_property(const char *vuart_info);
 #endif /* VUART_H */

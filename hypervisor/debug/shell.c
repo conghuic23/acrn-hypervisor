@@ -819,31 +819,35 @@ static int32_t shell_to_sos_console(__unused int32_t argc, __unused char **argv)
 
 	struct acrn_vm *vm;
 	struct acrn_vuart *vu;
-#ifdef CONFIG_PARTITION_MODE
 	struct acrn_vm_config *vm_config;
-
 	if (argc == 2U) {
 		guest_no = strtol_deci(argv[1]);
+		snprintf(temp_str, TEMP_STR_SIZE, "vuart_vmid= %d\n", vuart_vmid);
+		shell_puts(temp_str);
 	}
 
 	vuart_vmid = guest_no;
-#endif
+
 	/* Get the virtual device node */
 	vm = get_vm_from_vmid(guest_no);
 	if (vm == NULL) {
 		return -EINVAL;
 	}
 
-#ifdef CONFIG_PARTITION_MODE
 	vm_config = get_vm_config(guest_no);
 	if (vm_config != NULL && vm_config->vm_vuart == false) {
-		snprintf(temp_str, TEMP_STR_SIZE, "No vUART configured for vm%d\n", guest_no);
+		snprintf(temp_str, TEMP_STR_SIZE, "No vUART configured for vm%d %s\n", guest_no, vm_config->name);
+		shell_puts(temp_str);
+		snprintf(temp_str, TEMP_STR_SIZE, "type is %d\n", vm_config->type);
 		shell_puts(temp_str);
 		return 0;
 	}
-#endif
 
 	vu = vm_vuart(vm);
+	if (vu == NULL) {
+		shell_puts("vuart is null\n");
+		return 0;
+	}
 	/* UART is now owned by the SOS.
 	 * Indicate by toggling the flag.
 	 */

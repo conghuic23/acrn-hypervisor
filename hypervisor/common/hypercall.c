@@ -134,6 +134,7 @@ int32_t hcall_create_vm(struct acrn_vm *vm, uint64_t param)
 			/* TODO: set by DM */
 			vm_config->type = NORMAL_VM;
 			vm_config->guest_flags |= cv.vm_flag;
+			vm_config->vm_vuart = true;
 			(void)memcpy_s(&vm_config->GUID[0], 16U, &cv.GUID[0], 16U);
 
 			ret = create_vm(vm_id, vm_config, &target_vm);

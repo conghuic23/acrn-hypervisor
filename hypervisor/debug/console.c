@@ -49,6 +49,7 @@ static void console_timer_callback(__unused void *data)
 		/* serial Console Tx operation */
 		vuart_console_tx_chars(vu);
 	} else {
+
 		shell_kick();
 	}
 }

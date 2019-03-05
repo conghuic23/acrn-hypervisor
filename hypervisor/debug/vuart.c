@@ -39,18 +39,11 @@
 static uint32_t vuart_com_irq =  CONFIG_COM_IRQ;
 static uint16_t vuart_com_base = CONFIG_COM_BASE;
 
-#ifndef CONFIG_PARTITION_MODE
-static char vuart_rx_buf[RX_BUF_SIZE];
-static char vuart_tx_buf[TX_BUF_SIZE];
-#endif
-
 #define vuart_lock_init(vu)	spinlock_init(&((vu)->lock))
 #define vuart_lock(vu)		spinlock_obtain(&((vu)->lock))
 #define vuart_unlock(vu)	spinlock_release(&((vu)->lock))
 
-#ifdef CONFIG_PARTITION_MODE
 uint16_t vuart_vmid = 0xFFFFU;
-#endif
 
 static inline void fifo_reset(struct fifo *fifo)
 {
@@ -92,13 +85,8 @@ static inline uint32_t fifo_numchars(const struct fifo *fifo)
 
 static inline void vuart_fifo_init(struct acrn_vuart *vu)
 {
-#ifdef CONFIG_PARTITION_MODE
 	vu->txfifo.buf = vu->vuart_tx_buf;
 	vu->rxfifo.buf = vu->vuart_rx_buf;
-#else
-	vu->txfifo.buf = vuart_tx_buf;
-	vu->rxfifo.buf = vuart_rx_buf;
-#endif
 	vu->txfifo.size = TX_BUF_SIZE;
 	vu->rxfifo.size = RX_BUF_SIZE;
 	fifo_reset(&(vu->txfifo));
@@ -141,7 +129,7 @@ static void vuart_toggle_intr(const struct acrn_vuart *vu)
 	uint32_t operation;
 
 	intr_reason = vuart_intr_reason(vu);
-	vioapic_get_rte(vu->vm, vuart_com_irq, &rte);
+	vioapic_get_rte(vu->vm, vu->irq, &rte);
 
 	/* TODO:
 	 * Here should assert vuart irq according to CONFIG_COM_IRQ polarity.
@@ -157,8 +145,8 @@ static void vuart_toggle_intr(const struct acrn_vuart *vu)
 		operation = (intr_reason != IIR_NOPEND) ? GSI_SET_HIGH : GSI_SET_LOW;
 	}
 
-	vpic_set_irqline(vu->vm, vuart_com_irq, operation);
-	vioapic_set_irqline_lock(vu->vm, vuart_com_irq, operation);
+	vpic_set_irqline(vu->vm, vu->irq, operation);
+	vioapic_set_irqline_lock(vu->vm, vu->irq, operation);
 }
 
 static void vuart_write(struct acrn_vm *vm, uint16_t offset_arg,
@@ -377,13 +365,9 @@ struct acrn_vuart *vuart_console_active(void)
 {
 	struct acrn_vm *vm = NULL;
 
-#ifdef CONFIG_PARTITION_MODE
 	if (vuart_vmid < CONFIG_MAX_VM_NUM) {
 		vm = get_vm_from_vmid(vuart_vmid);
 	}
-#else
-	vm = get_sos_vm();
-#endif
 
 	if (vm != NULL) {
 		struct acrn_vuart *vu = vm_vuart(vm);
@@ -400,6 +384,10 @@ void vuart_init(struct acrn_vm *vm)
 	uint32_t divisor;
 	struct acrn_vuart *vu = vm_vuart(vm);
 
+	if (!is_sos_vm(vm)) {
+		vuart_com_base = 0x3F8;
+		vuart_com_irq = 4U;
+	}
 	/* Set baud rate*/
 	divisor = (UART_CLOCK_RATE / BAUD_9600) >> 4U;
 	vm->vuart.dll = (uint8_t)divisor;
@@ -407,15 +395,16 @@ void vuart_init(struct acrn_vm *vm)
 
 	vm->vuart.active = false;
 	vm->vuart.base = vuart_com_base;
+	vm->vuart.irq = vuart_com_irq;
 	vm->vuart.vm = vm;
 	vuart_fifo_init(vu);
 	vuart_lock_init(vu);
 	vuart_register_io_handler(vm);
 }
 
-bool hv_used_dbg_intx(uint32_t intx_pin)
+bool hv_used_dbg_intx(struct acrn_vm *vm, uint32_t intx_pin)
 {
-	return is_dbg_uart_enabled() && (intx_pin == vuart_com_irq);
+	return is_dbg_uart_enabled() && vm_vuart(vm) && (intx_pin == vm->vuart.irq);
 }
 
 /* vuart=ttySx@irqN, like vuart=ttyS1@irq6 head "vuart=ttyS" is parsed */
@@ -423,7 +412,7 @@ void vuart_set_property(const char *vuart_info)
 {
 	const uint16_t com_map[4] = {0x3f8, 0x2F8, 0x3E8, 0x2E8}; /* map to ttyS0-ttyS3 */
 	uint8_t com_idx;
-
+	/* TODO should config to one vm !!!!!!! */
 	com_idx = (uint8_t)(vuart_info[0] - '0');
 	if (com_idx < 4) {
 		vuart_com_base = com_map[com_idx];

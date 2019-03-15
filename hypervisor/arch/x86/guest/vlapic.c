@@ -1722,6 +1722,7 @@ int32_t vlapic_set_apicbase(struct acrn_vlapic *vlapic, uint64_t new)
 	int32_t ret = 0;
 	uint64_t changed;
 	bool change_in_vlapic_mode = false;
+	struct acrn_vcpu *vcpu = vlapic2vcpu(vlapic);
 
 	if (vlapic->msr_apicbase != new) {
 		changed = vlapic->msr_apicbase ^ new;
@@ -1737,7 +1738,6 @@ int32_t vlapic_set_apicbase(struct acrn_vlapic *vlapic, uint64_t new)
 		if (change_in_vlapic_mode) {
 			if ((new & APICBASE_LAPIC_MODE) ==
 						(APICBASE_XAPIC | APICBASE_X2APIC)) {
-				struct acrn_vcpu *vcpu = vlapic2vcpu(vlapic);
 
 				if (is_lapic_pt_configured(vcpu->vm)) {
 					/* vlapic need to be reset to make sure it is in correct state */
@@ -1748,6 +1748,15 @@ int32_t vlapic_set_apicbase(struct acrn_vlapic *vlapic, uint64_t new)
 				switch_apicv_mode_x2apic(vcpu);
 				update_vm_vlapic_state(vcpu->vm);
 			} else {
+
+				if (changed != APICBASE_ENABLED) {
+					pr_err("NOT support to change APIC_BASE MSR from %#lx to %#lx", vlapic->msr_apicbase, new);
+				} else {
+					vlapic->msr_apicbase = new;
+					if (!is_sos_vm(vcpu->vm)) {
+						pr_err("%s: 0x%llx", __func__, new);
+					}
+				}
 				/*
 				 * TODO: Logic to check for Invalid transitions, Invalid State
 				 * and mode switch according to SDM 10.12.5

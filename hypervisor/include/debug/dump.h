@@ -12,4 +12,7 @@ struct intr_excp_ctx;
 void dump_intr_excp_frame(const struct intr_excp_ctx *ctx);
 void dump_exception(struct intr_excp_ctx *ctx, uint16_t pcpu_id);
 
+void debug_dump_host_state(void);
+void debug_dump_guest_cpu_regs(struct acrn_vcpu *vcpu);
+
 #endif /* DUMP_H */

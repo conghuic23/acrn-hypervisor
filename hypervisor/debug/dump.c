@@ -239,6 +239,8 @@ void dump_intr_excp_frame(const struct intr_excp_ctx *ctx)
 
 	pr_acrnlog("=====================================================");
 	pr_acrnlog("===========================\n");
+
+	debug_dump_host_state();
 }
 
 void dump_exception(struct intr_excp_ctx *ctx, uint16_t pcpu_id)
@@ -259,4 +261,90 @@ void dump_exception(struct intr_excp_ctx *ctx, uint16_t pcpu_id)
 
 	/* Release lock to let other CPUs handle exception */
 	spinlock_release(&exception_spinlock);
+}
+
+void debug_dump_host_state(void)
+{
+	uint64_t flags;
+	uint64_t host_cr0, host_cr2, host_cr3, host_cr4, host_rsp;
+	uint16_t cs_sel;
+	uint16_t ds_sel;
+	uint16_t ss_sel;
+	uint16_t es_sel;
+	uint16_t fs_sel;
+	uint16_t gs_sel;
+
+	asm volatile("pushfq; popq %0" :"=m"(flags));
+	asm volatile("mov %%cr0, %0" : "=r" (host_cr0));
+	asm volatile("mov %%cr2, %0" : "=r" (host_cr2));
+	asm volatile("mov %%cr3, %0" : "=r" (host_cr3));
+	asm volatile("mov %%cr4, %0" : "=r" (host_cr4));
+	asm volatile("mov %%rsp, %0" : "=r" (host_rsp));
+	CPU_SEG_READ(cs, &cs_sel);
+	CPU_SEG_READ(ds, &ds_sel);
+	CPU_SEG_READ(ss, &ss_sel);
+	CPU_SEG_READ(es, &es_sel);
+	CPU_SEG_READ(fs, &fs_sel);
+	CPU_SEG_READ(gs, &gs_sel);
+
+	pr_err("DEBUG: =  Host flags =0x%016llx ", flags);
+	pr_err("DEBUG: =  Host CR0   =0x%016llx",  host_cr0);
+	pr_err("DEBUG: =  Host CR2   =0x%016llx", host_cr2);
+	pr_err("DEBUG: =  Host CR3   =0x%016llx", host_cr3);
+	pr_err("DEBUG: =  Host CR4   =0x%016llx", host_cr4);
+	pr_err("DEBUG: =  Host RSP   =0x%016llx", host_rsp);
+	pr_err("DEBUG: =  Host CS sel %04llx", cs_sel);
+	pr_err("DEBUG: =  Host SS sel %04llx", ds_sel);
+	pr_err("DEBUG: =  Host DS sel %04llx", ss_sel);
+	pr_err("DEBUG: =  Host ES sel %04llx", es_sel);
+	pr_err("DEBUG: =  Host FS sel %04llx", fs_sel);
+	pr_err("DEBUG: =  Host GS sel %04llx", gs_sel);
+	pr_err("DEBUG: host PAT:  %016llx", msr_read(MSR_IA32_PAT));
+	pr_err("DEBUG: host EFER: %016llx", msr_read(MSR_IA32_EFER));
+
+	pr_err("DEBUG: host VMX_EXIT_CTLS: %016llx", msr_read(MSR_IA32_VMX_EXIT_CTLS));
+	pr_err("DEBUG: host PERF_GLOBAL_CTRL: %016llx", msr_read(MSR_IA32_PERF_GLOBAL_CTRL));
+}
+
+/* for debug purpose */
+void debug_dump_guest_cpu_regs(struct acrn_vcpu *vcpu)
+{
+	uint32_t instruction_err = 0;
+	instruction_err = exec_vmread32(VMX_INSTR_ERROR);
+	pr_info("DEBUG: =  PCPU ID %d ==== VCPU ID %d====", pcpuid_from_vcpu(vcpu), vcpu->vcpu_id);
+	pr_info("DEBUG: vmexit fail err_inst=%x, exit_reason=%lx", instruction_err, vcpu->arch.exit_reason);
+
+	if (instruction_err) {
+		debug_dump_host_state();
+	}
+
+	pr_err("D: =  RIP   =0x%016llx (L:0x%016llx)  , RFLAGS=0x%016llx", exec_vmread(VMX_GUEST_RIP),
+			exec_vmread(VMX_GUEST_CS_BASE)+ exec_vmread(VMX_GUEST_RIP),
+			exec_vmread(VMX_GUEST_RFLAGS));
+	pr_err("D: =  CR0   =0x%016llx  , CR2   =0x%016llx", exec_vmread(VMX_GUEST_CR0), vcpu_get_cr2(vcpu));
+	pr_err("D: =  CR3   =0x%016llx  , CR4   =0x%016llx", exec_vmread(VMX_GUEST_CR3), exec_vmread(VMX_GUEST_CR4));
+	pr_err("D: =  EFER  =0x%016llx  , DR7   =0x%016llx", exec_vmread(VMX_GUEST_IA32_EFER_FULL), exec_vmread64(VMX_GUEST_DR7));
+	pr_err("D: =  PAT   =0x%016llx", exec_vmread64(VMX_GUEST_IA32_PAT_FULL));
+
+	pr_err("D: =  CS sel %04llx attr %08llx limit %08llx base %016llx", exec_vmread(VMX_GUEST_CS_SEL), exec_vmread(VMX_GUEST_CS_ATTR), exec_vmread(VMX_GUEST_CS_LIMIT), exec_vmread(VMX_GUEST_CS_BASE));
+	pr_err("D: =  SS sel %04llx attr %08llx limit %08llx base %016llx", exec_vmread(VMX_GUEST_SS_SEL), exec_vmread(VMX_GUEST_SS_ATTR), exec_vmread(VMX_GUEST_SS_LIMIT), exec_vmread(VMX_GUEST_SS_BASE));
+	pr_err("D: =  DS sel %04llx attr %08llx limit %08llx base %016llx", exec_vmread(VMX_GUEST_DS_SEL), exec_vmread(VMX_GUEST_DS_ATTR), exec_vmread(VMX_GUEST_DS_LIMIT), exec_vmread(VMX_GUEST_DS_BASE));
+	pr_err("D: =  ES sel %04llx attr %08llx limit %08llx base %016llx", exec_vmread(VMX_GUEST_ES_SEL), exec_vmread(VMX_GUEST_ES_ATTR), exec_vmread(VMX_GUEST_ES_LIMIT), exec_vmread(VMX_GUEST_ES_BASE));
+	pr_err("D: =  FS sel %04llx attr %08llx limit %08llx base %016llx", exec_vmread(VMX_GUEST_FS_SEL), exec_vmread(VMX_GUEST_FS_ATTR), exec_vmread(VMX_GUEST_FS_LIMIT), exec_vmread(VMX_GUEST_FS_BASE));
+	pr_err("D: =  GS sel %04llx attr %08llx limit %08llx base %016llx", exec_vmread(VMX_GUEST_GS_SEL), exec_vmread(VMX_GUEST_GS_ATTR), exec_vmread(VMX_GUEST_GS_LIMIT), exec_vmread(VMX_GUEST_GS_BASE));
+
+	pr_err("D: =  GDTR sel ---- attr -------- limit %08llx base %016llx", exec_vmread(VMX_GUEST_GDTR_LIMIT), exec_vmread(VMX_GUEST_GDTR_BASE));
+	pr_err("D: =  LDTR sel %04llx attr %08llx limit %08llx base %016llx", exec_vmread(VMX_GUEST_LDTR_SEL), exec_vmread(VMX_GUEST_LDTR_ATTR), exec_vmread(VMX_GUEST_LDTR_LIMIT), exec_vmread(VMX_GUEST_LDTR_BASE));
+	pr_err("D: =  IDTR sel ---- attr -------- limit %08llx base %016llx", exec_vmread(VMX_GUEST_IDTR_LIMIT), exec_vmread(VMX_GUEST_IDTR_BASE));
+	pr_err("D: =  TR   sel %04llx attr %08llx limit %08llx base %016llx", exec_vmread(VMX_GUEST_TR_SEL), exec_vmread(VMX_GUEST_TR_ATTR), exec_vmread(VMX_GUEST_TR_LIMIT), exec_vmread(VMX_GUEST_TR_BASE));
+
+	pr_err("D: =  RAX=0x%016llx    RCX=0x%016llx", vcpu_get_gpreg(vcpu, CPU_REG_RAX), vcpu_get_gpreg(vcpu, CPU_REG_RCX));
+	pr_err("D: =  RDX=0x%016llx    RBX=0x%016llx", vcpu_get_gpreg(vcpu, CPU_REG_RDX), vcpu_get_gpreg(vcpu, CPU_REG_RBX));
+	pr_err("D: =  RSP=0x%016llx  , RBP=0x%016llx", vcpu_get_gpreg(vcpu, CPU_REG_RSP), vcpu_get_gpreg(vcpu, CPU_REG_RBP));
+	pr_err("D: =  RSI=0x%016llx  , RDI=0x%016llx", vcpu_get_gpreg(vcpu, CPU_REG_RSI), vcpu_get_gpreg(vcpu, CPU_REG_RDI));
+	pr_err("D: =  R8 =0x%016llx  , R9 =0x%016llx", vcpu_get_gpreg(vcpu, CPU_REG_R8), vcpu_get_gpreg(vcpu, CPU_REG_R9));
+	pr_err("D: =  R10=0x%016llx  , R11=0x%016llx", vcpu_get_gpreg(vcpu, CPU_REG_R10), vcpu_get_gpreg(vcpu, CPU_REG_R11));
+	pr_err("D: =  R12=0x%016llx  , R13=0x%016llx", vcpu_get_gpreg(vcpu, CPU_REG_R12), vcpu_get_gpreg(vcpu, CPU_REG_R13));
+	pr_err("D: =  R14=0x%016llx  , R15=0x%016llx", vcpu_get_gpreg(vcpu, CPU_REG_R14), vcpu_get_gpreg(vcpu, CPU_REG_R15));
+
 }

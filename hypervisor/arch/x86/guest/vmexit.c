@@ -18,6 +18,7 @@
 #include <vtd.h>
 #include <vcpuid.h>
 #include <trace.h>
+#include <dump.h>
 
 /*
  * According to "SDM APPENDIX C VMX BASIC EXIT REASONS",
@@ -219,6 +220,13 @@ int32_t vmexit_handler(struct acrn_vcpu *vcpu)
 
 		/* Log details for exit */
 		pr_dbg("Exit Reason: 0x%016lx ", vcpu->arch.exit_reason);
+
+		if (!is_sos_vm(vcpu->vm)) {
+			/* Log details for exit */
+			pr_err("\n");
+			pr_err("Exit Reason: 0x%016llx ", vcpu->arch.exit_reason);
+			debug_dump_guest_cpu_regs(vcpu);
+		}
 
 		/* Ensure exit reason is within dispatch table */
 		if (basic_exit_reason >= ARRAY_SIZE(dispatch_table)) {

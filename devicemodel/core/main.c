@@ -90,6 +90,7 @@ bool lapic_pt;
 bool is_rtvm;
 bool is_winvm;
 bool skip_pci_mem64bar_workaround = false;
+bool debug_reg_enable = false;
 
 static int guest_ncpus;
 static int virtio_msix = 1;
@@ -741,6 +742,7 @@ enum {
 	CMD_OPT_PM_NOTIFY_CHANNEL,
 	CMD_OPT_PM_BY_VUART,
 	CMD_OPT_WINDOWS,
+	CMD_OPT_DEBUGREG,
 };
 
 static struct option long_options[] = {
@@ -781,6 +783,7 @@ static struct option long_options[] = {
 	{"pm_notify_channel",	required_argument,	0, CMD_OPT_PM_NOTIFY_CHANNEL},
 	{"pm_by_vuart",	required_argument,	0, CMD_OPT_PM_BY_VUART},
 	{"windows",		no_argument,		0, CMD_OPT_WINDOWS},
+	{"debug_reg",		no_argument,		0, CMD_OPT_DEBUGREG},
 	{0,			0,			0,  0  },
 };
 
@@ -953,6 +956,9 @@ main(int argc, char *argv[])
 			break;
 		case CMD_OPT_WINDOWS:
 			is_winvm = true;
+			break;
+		case CMD_OPT_DEBUGREG:
+			debug_reg_enable = true;
 			break;
 		case 'h':
 			usage(0);

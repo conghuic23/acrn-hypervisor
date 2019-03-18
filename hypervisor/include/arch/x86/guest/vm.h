@@ -156,6 +156,8 @@ struct acrn_vm {
 	uint8_t vrtc_offset;
 
 	uint64_t intr_inject_delay_delta; /* delay of intr injection */
+
+	bool enable_debug;
 } __aligned(PAGE_SIZE);
 
 /*

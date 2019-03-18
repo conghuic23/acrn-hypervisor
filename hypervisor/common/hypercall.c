@@ -333,6 +333,9 @@ int32_t hcall_set_vcpu_regs(struct acrn_vm *vm, uint16_t vmid, uint64_t param)
 			vcpu = vcpu_from_vid(target_vm, vcpu_regs.vcpu_id);
 			if (vcpu->state != VCPU_OFFLINE) {
 				set_vcpu_regs(vcpu, &(vcpu_regs.vcpu_regs));
+				if (vcpu_regs.debug_flags != 0) {
+					target_vm->enable_debug = true;
+				}
 				ret = 0;
 			}
 		}

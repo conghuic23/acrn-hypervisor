@@ -106,4 +106,28 @@ struct shell {
 #define SHELL_CMD_WRMSR_PARAM		"[-p<pcpu_id>]	<msr_index> <value>"
 #define SHELL_CMD_WRMSR_HELP		"Write value (in hexadecimal) to the MSR at msr_index (in hexadecimal) for CPU"\
 					" ID pcpu_id"
+
+#define SHELL_CMD_BREAKPOINT		"break"
+#define SHELL_CMD_BREAKPOINT_PARAM	"<vm_id, vcpu_id, addr>"
+#define SHELL_CMD_BREAKPOINT_HELP	"set breakpoint"
+
+ #define SHELL_CMD_CONTINUE		"cont"
+#define SHELL_CMD_CONTINUE_PARAM	"<vm_id, vcpu_id>"
+#define SHELL_CMD_CONTINUE_HELP		"continue from breakpoint"
+
+ #define SHELL_CMD_STEP			"step"
+#define SHELL_CMD_STEP_PARAM		"<vm_id, vcpu_id>"
+#define SHELL_CMD_STEP_HELP		"step from the current instruction"
+
+ #define SHELL_CMD_DUMPGPA		"gpa"
+#define SHELL_CMD_DUMPGPA_PARAM		"<vm_id, gpa_addr, lenght>"
+#define SHELL_CMD_DUMPGPA_HELP		"dump pysical memory content according to GAP"
+
+ #define SHELL_CMD_WRITEGPA		"wgpa"
+#define SHELL_CMD_WRITEGPA_PARAM	"<vm_id, gpa_addr>"
+#define SHELL_CMD_WRITEGPA_HELP		"write 64bit data according to GAP"
+
+ #define SHELL_CMD_DUMPPTE		"pte"
+#define SHELL_CMD_DUMPPTE_PARAM		"<vm_id, vcpu_id, addr>"
+#define SHELL_CMD_DUMPPTE_HELP		"dump page table entries for specific address"
 #endif /* SHELL_PRIV_H */

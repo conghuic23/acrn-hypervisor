@@ -717,6 +717,7 @@ void reset_vcpu(struct acrn_vcpu *vcpu, enum reset_mode mode)
 
 	vcpu_reset_internal(vcpu, mode);
 	vcpu_set_state(vcpu, VCPU_INIT);
+	vcpu->dbg_req_state = VCPU_RUNNING;
 }
 
 void zombie_vcpu(struct acrn_vcpu *vcpu, enum vcpu_state new_state)

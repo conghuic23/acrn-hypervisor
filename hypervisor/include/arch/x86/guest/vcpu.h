@@ -262,6 +262,7 @@ struct acrn_vcpu {
 	struct acrn_vm *vm;		/* Reference to the VM this VCPU belongs to */
 
 	volatile enum vcpu_state state;	/* State of this VCPU */
+	volatile enum vcpu_state dbg_req_state;
 
 	struct thread_object thread_obj;
 	bool launched; /* Whether the vcpu is launched on target pcpu */

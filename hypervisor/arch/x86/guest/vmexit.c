@@ -33,6 +33,7 @@ static int32_t wbinvd_vmexit_handler(struct acrn_vcpu *vcpu);
 static int32_t undefined_vmexit_handler(struct acrn_vcpu *vcpu);
 static int32_t pause_vmexit_handler(__unused struct acrn_vcpu *vcpu);
 static int32_t hlt_vmexit_handler(struct acrn_vcpu *vcpu);
+static int32_t dr_access_vmexit_handler(struct acrn_vcpu *vcpu);
 
 /* VM Dispatch table for Exit condition handling */
 static const struct vm_exit_dispatch dispatch_table[NR_VMX_EXIT_REASONS] = {
@@ -96,7 +97,8 @@ static const struct vm_exit_dispatch dispatch_table[NR_VMX_EXIT_REASONS] = {
 		.handler = cr_access_vmexit_handler,
 		.need_exit_qualification = 1},
 	[VMX_EXIT_REASON_DR_ACCESS] = {
-		.handler = unhandled_vmexit_handler},
+		.handler = dr_access_vmexit_handler,
+		.need_exit_qualification = 1},
 	[VMX_EXIT_REASON_IO_INSTRUCTION] = {
 		.handler = pio_instr_vmexit_handler,
 		.need_exit_qualification = 1},
@@ -426,4 +428,83 @@ static int32_t undefined_vmexit_handler(struct acrn_vcpu *vcpu)
 {
 	vcpu_inject_ud(vcpu);
 	return 0;
+}
+
+#define DR7_G0_MASK		(1UL << 1U)
+#define DR7_DR0_ALL_MASK	0x000f0003UL
+static int32_t dr_access_vmexit_handler(struct  acrn_vcpu *vcpu)
+{
+	uint64_t reg = 0;
+	uint32_t idx;
+	uint64_t exit_qual;
+	uint32_t gp_idx;
+
+
+ 	exit_qual = vcpu->arch.exit_qualification;
+	idx = exit_qual & 0x7UL;
+
+ 	gp_idx = (exit_qual >> 8U) & 0xFU;
+
+ 	if ((exit_qual & 0x10UL) == 0UL) { //Move to DR
+		reg = vcpu_get_gpreg(vcpu, gp_idx);
+
+ 		pr_err("%s: write value 0x%llx to DR%d", __func__, reg, idx);
+		switch (idx) {
+		case 0U:
+			pr_err("%s: DR0 is used by hv, ignore", __func__);
+			break;
+		case 1U:
+			asm volatile("mov %0, %%dr1": :"r"(reg):);
+			break;
+		case 2U:
+			asm volatile("mov %0, %%dr2": :"r"(reg):);
+			break;
+		case 3U:
+			asm volatile("mov %0, %%dr3": :"r"(reg):);
+			break;
+		case 6U:
+			asm volatile("mov %0, %%dr6": :"r"(reg):);
+			break;
+		case 7U:
+			if ((reg & 0x000f0003UL) != DR7_G0_MASK) {
+				pr_err("%s: DR0 is used by hv, ignore", __func__);
+				return 0;
+			}
+			exec_vmwrite(VMX_GUEST_DR7, reg);
+			break;
+		default:
+			pr_err("%s: unhandled write to DR%d", __func__, idx);
+			break;
+
+ 		}
+
+ 	} else { //Move from DR
+		switch (idx) {
+		case 0U:
+			asm volatile("mov %%dr0, %0":"=r"(reg) ::);
+			break;
+		case 1U:
+			asm volatile("mov %%dr1, %0":"=r"(reg) ::);
+			break;
+		case 2U:
+			asm volatile("mov %%dr2, %0":"=r"(reg) ::);
+			break;
+		case 3U:
+			asm volatile("mov %%dr3, %0":"=r"(reg) ::);
+			break;
+		case 6U:
+			asm volatile("mov %%dr6, %0":"=r"(reg) ::);
+			break;
+		case 7U:
+			reg = exec_vmread(VMX_GUEST_DR7);
+			break;
+		default:
+			pr_err("%s: unhandled read from DR%d", __func__, idx);
+			break;
+		}
+
+ 		vcpu_set_gpreg(vcpu, gp_idx, reg);
+	}
+
+ 	return 0;
 }

@@ -66,6 +66,17 @@ static void init_guest_vmx(struct acrn_vcpu *vcpu, uint64_t cr0, uint64_t cr3,
 	exec_vmwrite(VMX_GUEST_IA32_PAT_FULL, PAT_POWER_ON_VALUE);
 	exec_vmwrite(VMX_GUEST_DR7, DR7_INIT_VALUE);
 	exec_vmwrite64(VMX_GUEST_IA32_BNDCFGS_FULL, 0U);
+
+	/* break UOS at reset vector if debug enabled*/
+	if (!is_sos_vm(vcpu->vm) && vcpu->vm->enable_debug){
+		uint32_t ip = 0xFFFFFFF0U;
+		asm volatile("mov %0, %%dr0":
+					     :"r"(ip)
+					     :);
+		exec_vmwrite(VMX_GUEST_DR7, DR7_INIT_VALUE | (1U << 1U));
+		pr_err ("Enable debug on UOS, breakpoint set to 0x%lx", ip);
+	}
+
 }
 
 static void init_guest_state(struct acrn_vcpu *vcpu)
@@ -271,6 +282,11 @@ static void init_exec_ctrl(struct acrn_vcpu *vcpu)
 			 VMX_PROCBASED_CTLS_IO_BITMAP | VMX_PROCBASED_CTLS_MSR_BITMAP |
 			 VMX_PROCBASED_CTLS_HLT | VMX_PROCBASED_CTLS_SECONDARY);
 
+	/* trap MOV to/from DR if debug enabled for UOS */
+	if (!is_sos_vm(vcpu->vm) && vcpu->vm->enable_debug)
+		value32 = check_vmx_ctrl(MSR_IA32_VMX_PROCBASED_CTLS,
+			value32 | VMX_PROCBASED_CTLS_MOV_DR);
+
 	/*Disable VM_EXIT for CR3 access*/
 	value32 &= ~(VMX_PROCBASED_CTLS_CR3_LOAD | VMX_PROCBASED_CTLS_CR3_STORE);
 	value32 &= ~(VMX_PROCBASED_CTLS_CR8_LOAD | VMX_PROCBASED_CTLS_CR8_STORE);
@@ -366,6 +382,11 @@ static void init_exec_ctrl(struct acrn_vcpu *vcpu)
 	 * enable VM exit on MC only
 	 */
 	value32 = (1U << IDT_MC);
+
+	/* trap #DB exception */
+	if (!is_sos_vm(vcpu->vm) && vcpu->vm->enable_debug)
+		value32 |= (1U << IDT_DB);
+
 	exec_vmwrite32(VMX_EXCEPTION_BITMAP, value32);
 
 	/* Set up page fault error code mask - second paragraph * pg 2902
@@ -443,6 +464,10 @@ static void init_entry_ctrl(const struct acrn_vcpu *vcpu)
 	value32 = (VMX_ENTRY_CTLS_LOAD_EFER |
 		   VMX_ENTRY_CTLS_LOAD_PAT);
 
+	if (!is_sos_vm(vcpu->vm) && vcpu->vm->enable_debug) {
+		value32 |= VMX_ENTRY_CTLS_LOAD_DBG;
+	}
+
 	value32 |= VMX_ENTRY_CTLS_LOAD_BNDCFGS;
 
 	if (get_vcpu_mode(vcpu) == CPU_MODE_64BIT) {
@@ -491,6 +516,10 @@ static void init_exit_ctrl(const struct acrn_vcpu *vcpu)
 			 VMX_EXIT_CTLS_SAVE_EFER | VMX_EXIT_CTLS_HOST_ADDR64 |
 			 VMX_EXIT_CTLS_CLEAR_BNDCFGS);
 
+	if (!is_sos_vm(vcpu->vm) && vcpu->vm->enable_debug) {
+		value32 = check_vmx_ctrl(MSR_IA32_VMX_EXIT_CTLS, value32 | VMX_EXIT_CTLS_SAVE_DBG);
+	}
+
 	exec_vmwrite32(VMX_EXIT_CONTROLS, value32);
 	pr_dbg("VMX_EXIT_CONTROL: 0x%x ", value32);
 
@@ -536,6 +565,7 @@ void init_vmcs(struct acrn_vcpu *vcpu)
 	init_guest_state(vcpu);
 	init_entry_ctrl(vcpu);
 	init_exit_ctrl(vcpu);
+	vcpu->dbg_req_state = VCPU_RUNNING;
 }
 
 /**

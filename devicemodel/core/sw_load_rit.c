@@ -240,6 +240,7 @@ int acrn_parse_rit(char *arg)
 		return -1;
 }
 
+extern bool debug_reg_enable;
 int acrn_sw_load_rit(struct vmctx *ctx)
 {
 	char *rit_dirc;
@@ -278,6 +279,9 @@ int acrn_sw_load_rit(struct vmctx *ctx)
 	ctx->bsp_regs.vcpu_regs.cs_limit = 0xFFFFU;
 	ctx->bsp_regs.vcpu_regs.cs_base = 0xFFFF0000UL;
 	ctx->bsp_regs.vcpu_regs.rip = 0xFFF0UL;
+
+	if (debug_reg_enable)
+		ctx->bsp_regs.debug_flags = 1;
 
 	printf("SW_LOAD: RIT loaded!\r\n");
 

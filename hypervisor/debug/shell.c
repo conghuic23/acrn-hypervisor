@@ -21,6 +21,7 @@
 #include <version.h>
 #include <shell.h>
 #include <vmcs.h>
+#include <ept.h>
 #include <host_pm.h>
 
 #define TEMP_STR_SIZE		60U
@@ -52,6 +53,12 @@ static int32_t shell_cpuid(int32_t argc, char **argv);
 static int32_t shell_reboot(int32_t argc, char **argv);
 static int32_t shell_rdmsr(int32_t argc, char **argv);
 static int32_t shell_wrmsr(int32_t argc, char **argv);
+static int32_t shell_set_breakpoint(int32_t argc, char **argv);
+static int32_t shell_continue(int32_t argc, char **argv);
+static int32_t shell_step(int32_t argc, char **argv);
+static int32_t shell_dump_gpa(int32_t argc, char **argv);
+static int32_t shell_dump_pte(int32_t argc, char **argv);
+static int32_t shell_write_gpa(int32_t argc, char **argv);
 
 static struct shell_cmd shell_cmds[] = {
 	{
@@ -155,6 +162,42 @@ static struct shell_cmd shell_cmds[] = {
 		.cmd_param	= SHELL_CMD_WRMSR_PARAM,
 		.help_str	= SHELL_CMD_WRMSR_HELP,
 		.fcn		= shell_wrmsr,
+	},
+	{
+		.str		= SHELL_CMD_BREAKPOINT,
+		.cmd_param	= SHELL_CMD_BREAKPOINT_PARAM,
+		.help_str	= SHELL_CMD_BREAKPOINT_HELP,
+		.fcn		= shell_set_breakpoint,
+	},
+	{
+		.str		= SHELL_CMD_CONTINUE,
+		.cmd_param	= SHELL_CMD_CONTINUE_PARAM,
+		.help_str	= SHELL_CMD_CONTINUE_HELP,
+		.fcn		= shell_continue,
+	},
+	{
+		.str		= SHELL_CMD_STEP,
+		.cmd_param	= SHELL_CMD_STEP_PARAM,
+		.help_str	= SHELL_CMD_STEP_HELP,
+		.fcn		= shell_step,
+	},
+	{
+		.str		= SHELL_CMD_DUMPGPA,
+		.cmd_param	= SHELL_CMD_DUMPGPA_PARAM,
+		.help_str	= SHELL_CMD_DUMPGPA_HELP,
+		.fcn		= shell_dump_gpa,
+	},
+	{
+		.str		= SHELL_CMD_DUMPPTE,
+		.cmd_param	= SHELL_CMD_DUMPPTE_PARAM,
+		.help_str	= SHELL_CMD_DUMPPTE_HELP,
+		.fcn		= shell_dump_pte,
+	},
+	{
+		.str		= SHELL_CMD_WRITEGPA,
+		.cmd_param	= SHELL_CMD_WRITEGPA_PARAM,
+		.help_str	= SHELL_CMD_WRITEGPA_HELP,
+		.fcn		= shell_write_gpa,
 	},
 };
 
@@ -1448,4 +1491,449 @@ static int32_t shell_wrmsr(int32_t argc, char **argv)
 	}
 
 	return ret;
+}
+
+#define DR7_BIT10_MASK	(1U << 10U)
+#define DR7_G0_MASK	(1U << 1U)
+#define DR7_DR0_ALL_MASK	0x000f0003
+
+ static void set_breakpoint(__unused void *data)
+{
+	uint64_t *addr = (uint64_t *)data;
+	uint64_t ip = *addr;
+	uint32_t dr7;
+
+ 	asm volatile("mov %0, %%dr0":
+				   :"r"(ip)
+				   :);
+	dr7 = exec_vmread32(VMX_GUEST_DR7);
+	dr7 = dr7 & (~DR7_DR0_ALL_MASK);
+	dr7 |= DR7_BIT10_MASK | DR7_G0_MASK;
+	exec_vmwrite32(VMX_GUEST_DR7, dr7);
+}
+
+
+ static int32_t shell_set_breakpoint(int32_t argc, char **argv)
+{
+	int32_t status = 0;
+	uint16_t vm_id;
+	uint16_t vcpu_id;
+	struct acrn_vm *vm;
+	struct acrn_vcpu *vcpu;
+	uint64_t mask = 0UL;
+	uint64_t addr;
+
+ 	/* User input invalidation */
+	if (argc != 4) {
+		shell_puts("Please enter cmd with <vm_id, vcpu_id, addr>\r\n");
+		status = -EINVAL;
+		goto out;
+	}
+
+ 	status = strtol_deci(argv[1]);
+	if (status < 0) {
+		goto out;
+	}
+	vm_id = (uint16_t)status;
+	vcpu_id = (uint16_t)strtol_deci(argv[2]);
+
+ 	addr = strtoul_hex(argv[3]);
+
+ 	// if ((addr & 0xFFFFFFFF00000000) != 0UL) {
+	// 	shell_puts("addr should be 32bit\r\n");
+	// 	status = -EINVAL;
+	// 	goto out;
+	// }
+
+ 	vm = get_vm_from_vmid(vm_id);
+	if (vm == NULL) {
+		shell_puts("No vm found in the input <vm_id, vcpu_id>\r\n");
+		status = -EINVAL;
+		goto out;
+	}
+
+ 	if (vcpu_id >= vm->hw.created_vcpus) {
+		shell_puts("vcpu id is out of range\r\n");
+		status = -EINVAL;
+		goto out;
+	}
+
+ 	vcpu = vcpu_from_vid(vm, vcpu_id);
+
+ 	if (pcpuid_from_vcpu(vcpu) == get_pcpu_id()) {
+
+ 		set_breakpoint(&addr);
+	} else {
+		bitmap_set_nolock(pcpuid_from_vcpu(vcpu), &mask);
+		smp_call_function(mask, set_breakpoint, &addr);
+	}
+
+ 	status = 0;
+
+ out:
+	return status;
+}
+
+ struct rflags_data
+{
+	struct acrn_vcpu *target_vcpu;
+	uint64_t set_mask;
+	uint64_t clear_mask;
+};
+
+ static void set_rflags(void* data)
+{
+	struct rflags_data *rflags = (struct rflags_data *)data;
+	struct acrn_vcpu *vcpu = rflags->target_vcpu;
+
+ 	vcpu_set_rflags(vcpu, (vcpu_get_rflags(vcpu) & (~rflags->clear_mask)) | rflags->set_mask);
+}
+
+ static int32_t shell_continue(int32_t argc, char **argv)
+{
+	int32_t status = 0;
+	uint16_t vm_id;
+	uint16_t vcpu_id;
+	struct acrn_vm *vm;
+	struct acrn_vcpu *vcpu;
+	uint64_t mask = 0UL;
+	struct rflags_data rflags;
+
+ 	/* User input invalidation */
+	if (argc != 3) {
+		shell_puts("Please enter cmd with <vm_id, vcpu_id>\r\n");
+		status = -EINVAL;
+		goto out;
+	}
+
+ 	status = strtol_deci(argv[1]);
+	if (status < 0) {
+		goto out;
+	}
+	vm_id = (uint16_t)status;
+	vcpu_id = (uint16_t)strtol_deci(argv[2]);
+
+
+ 	vm = get_vm_from_vmid(vm_id);
+	if (vm == NULL) {
+		shell_puts("No vm found in the input <vm_id, vcpu_id>\r\n");
+		status = -EINVAL;
+		goto out;
+	}
+
+ 	if (vcpu_id >= vm->hw.created_vcpus) {
+		shell_puts("vcpu id is out of range\r\n");
+		status = -EINVAL;
+		goto out;
+	}
+
+ 	vcpu = vcpu_from_vid(vm, vcpu_id);
+
+ 	vcpu->dbg_req_state = VCPU_RUNNING;
+
+ 	if (pcpuid_from_vcpu(vcpu) == get_pcpu_id()) {
+		vcpu_set_rflags(vcpu, vcpu_get_rflags(vcpu) & (~0x100UL));
+	} else {
+		rflags.clear_mask = 0x100UL;
+		rflags.set_mask = 0x0UL;
+		rflags.target_vcpu = vcpu;
+		bitmap_set_nolock(pcpuid_from_vcpu(vcpu), &mask);
+		smp_call_function(mask, set_rflags, &rflags);
+	}
+
+ 	status = 0;
+
+ out:
+	return status;
+}
+
+ static int32_t shell_step(int32_t argc, char **argv)
+{
+	int32_t status = 0;
+	uint16_t vm_id;
+	uint16_t vcpu_id;
+	struct acrn_vm *vm;
+	struct acrn_vcpu *vcpu;
+	uint64_t mask = 0UL;
+	struct rflags_data rflags;
+
+ 	/* User input invalidation */
+	if (argc != 3) {
+		shell_puts("Please enter cmd with <vm_id, vcpu_id>\r\n");
+		status = -EINVAL;
+		goto out;
+	}
+
+ 	status = strtol_deci(argv[1]);
+	if (status < 0) {
+		goto out;
+	}
+	vm_id = (uint16_t)status;
+	vcpu_id = (uint16_t)strtol_deci(argv[2]);
+
+ 	vm = get_vm_from_vmid(vm_id);
+	if (vm == NULL) {
+		shell_puts("No vm found in the input <vm_id, vcpu_id>\r\n");
+		status = -EINVAL;
+		goto out;
+	}
+
+ 	if (vcpu_id >= vm->hw.created_vcpus) {
+		shell_puts("vcpu id is out of range\r\n");
+		status = -EINVAL;
+		goto out;
+	}
+
+ 	vcpu = vcpu_from_vid(vm, vcpu_id);
+
+ 	if (pcpuid_from_vcpu(vcpu) == get_pcpu_id()) {
+		vcpu_set_rflags(vcpu, vcpu_get_rflags(vcpu) | 0x100UL);
+	} else {
+		rflags.clear_mask = 0UL;
+		rflags.set_mask = 0x100UL;
+		rflags.target_vcpu = vcpu;
+		bitmap_set_nolock(pcpuid_from_vcpu(vcpu), &mask);
+		smp_call_function(mask, set_rflags, &rflags);
+	}
+
+ 	vcpu->dbg_req_state = VCPU_RUNNING;
+
+ 	status = 0;
+
+ out:
+	return status;
+}
+
+
+ static int32_t shell_dump_gpa(int32_t argc, char **argv)
+{
+	int32_t status = 0;
+	uint16_t vm_id;
+	struct acrn_vm *vm;
+	uint64_t addr;
+	uint64_t length;
+	uint64_t hpa_addr;
+	uint64_t data64;
+	char temp_str[MAX_STR_SIZE];
+
+ 	/* User input invalidation */
+	if (argc != 4) {
+		shell_puts("Please enter cmd with <vm_id, gpa_addr, length>\r\n");
+		status = -EINVAL;
+		goto out;
+	}
+
+ 	status = strtol_deci(argv[1]);
+	if (status < 0) {
+		goto out;
+	}
+	vm_id = (uint16_t)status;
+
+ 	addr = strtoul_hex(argv[2]);
+
+
+ 	length = strtoul_hex(argv[3]);
+
+ 	vm = get_vm_from_vmid(vm_id);
+	if (vm == NULL) {
+		shell_puts("No vm found in the input <vm_id, vcpu_id>\r\n");
+		status = -EINVAL;
+		goto out;
+	}
+
+
+ 	while(length >0) {
+		hpa_addr = gpa2hpa(vm, addr);
+		copy_from_gpa(vm, &data64, addr, 8U);
+		snprintf(temp_str, MAX_STR_SIZE, "GPA(0x%016llx) -> HPA(0x%016llx): 0x%016llx\r\n",
+			addr, hpa_addr, data64);
+		shell_puts(temp_str);
+		length -= 8UL;
+		addr += 8UL;
+	}
+
+ 	status = 0;
+
+ out:
+	return status;
+}
+
+ struct dump_pte_args {
+	struct acrn_vcpu *vcpu;
+	uint64_t addr;
+	char *dump_buffer;
+};
+
+ static void dump_pte_4level(void *data)
+{
+	uint64_t pml4_table_addr;
+	uint64_t pdpt_addr;
+	uint64_t pdt_addr;
+	uint64_t pt_addr;
+	uint64_t index;
+	uint64_t entry;
+	uint64_t entry_guest_addr;
+	struct dump_pte_args *para = (struct dump_pte_args *)data;
+
+ 	snprintf(para->dump_buffer, MAX_STR_SIZE, "CR3  : 0x%llx\r\n", exec_vmread(VMX_GUEST_CR3));
+	shell_puts(para->dump_buffer);
+
+ 	//get PML4 Table
+	pml4_table_addr = exec_vmread(VMX_GUEST_CR3) & 0x0000FFFFFFFFF000UL;
+	index = (para->addr >> 39U) & 0x1FFUL;
+	entry_guest_addr = pml4_table_addr + 8U * index;
+	copy_from_gpa(para->vcpu->vm, &entry, entry_guest_addr, 8U);
+	snprintf(para->dump_buffer, MAX_STR_SIZE, "PML4E:@0x%016llx 0x%016llx\r\n", entry_guest_addr, entry);
+	shell_puts(para->dump_buffer);
+
+ 	//get PDPT
+	pdpt_addr = entry & 0x0000FFFFFFFFF000UL;
+	index = (para->addr >> 30U) & 0x1FFUL;
+	entry_guest_addr = pdpt_addr + 8U * index;
+	copy_from_gpa(para->vcpu->vm, &entry, entry_guest_addr, 8U);
+	snprintf(para->dump_buffer, MAX_STR_SIZE, "PDPTE:@0x%016llx 0x%016llx\r\n", entry_guest_addr, entry);
+	shell_puts(para->dump_buffer);
+	if ((entry & (1UL << 7U)) != 0) {
+		shell_puts("1GB page\r\n");
+		return;
+	}
+
+ 	//get PDT
+	pdt_addr = entry & 0x0000FFFFFFFFF000UL;
+	index = (para->addr >> 21U) & 0x1FFUL;
+	entry_guest_addr = pdt_addr + 8U * index;
+	copy_from_gpa(para->vcpu->vm, &entry, entry_guest_addr, 8U);
+	snprintf(para->dump_buffer, MAX_STR_SIZE, "PDE  :@0x%016llx 0x%016llx\r\n", entry_guest_addr, entry);
+	shell_puts(para->dump_buffer);
+	if ((entry & (1UL << 7U)) != 0) {
+		shell_puts("2MB page\r\n");
+		return;
+	}
+
+ 	//get PT
+	pt_addr = entry & 0x0000FFFFFFFFF000UL;
+	index = (para->addr >> 12U) & 0x1FFUL;
+	entry_guest_addr = pt_addr + 8U * index;
+	copy_from_gpa(para->vcpu->vm, &entry, entry_guest_addr, 8U);
+	snprintf(para->dump_buffer, MAX_STR_SIZE, "PTE  :@0x%016llx 0x%016llx\r\n", entry_guest_addr, entry);
+	shell_puts(para->dump_buffer);
+	shell_puts("4KB page\r\n");
+}
+
+ static int32_t shell_dump_pte(int32_t argc, char **argv)
+{
+	int32_t status = 0;
+	uint16_t vm_id;
+	uint16_t vcpu_id;
+	struct acrn_vm *vm;
+	struct acrn_vcpu *vcpu;
+	uint64_t addr;
+	char temp_str[MAX_STR_SIZE];
+	uint64_t mask = 0UL;
+	enum vm_paging_mode page_mode;
+	bool local_cpu = false;
+	struct dump_pte_args dump_args;
+
+ 	/* User input invalidation */
+	if (argc != 4) {
+		shell_puts("Please enter cmd with <vm_id, vcpu_id, addr>\r\n");
+		status = -EINVAL;
+		goto out;
+	}
+
+ 	status = strtol_deci(argv[1]);
+	if (status < 0) {
+		goto out;
+	}
+	vm_id = (uint16_t)status;
+	vcpu_id = (uint16_t)strtol_deci(argv[2]);
+
+ 	vm = get_vm_from_vmid(vm_id);
+	if (vm == NULL) {
+		shell_puts("No vm found in the input <vm_id, vcpu_id>\r\n");
+		status = -EINVAL;
+		goto out;
+	}
+
+ 	if (vcpu_id >= vm->hw.created_vcpus) {
+		shell_puts("vcpu id is out of range\r\n");
+		status = -EINVAL;
+		goto out;
+	}
+
+ 	vcpu = vcpu_from_vid(vm, vcpu_id);
+
+ 	addr = strtoul_hex(argv[3]);
+
+ 	page_mode = get_vcpu_paging_mode(vcpu);
+
+
+ 	if (pcpuid_from_vcpu(vcpu) == get_pcpu_id()) {
+		local_cpu = true;
+	} else {
+		local_cpu = false;
+	}
+
+ 	dump_args.vcpu = vcpu;
+	dump_args.addr = addr;
+	dump_args.dump_buffer = temp_str;
+
+ 	if(page_mode == PAGING_MODE_4_LEVEL) {
+		if(local_cpu) {
+			dump_pte_4level(&dump_args);
+		}else {
+			bitmap_set_nolock(pcpuid_from_vcpu(vcpu), &mask);
+			smp_call_function(mask, dump_pte_4level, &dump_args);
+		}
+
+ 	} else {
+		shell_puts("only support 4 level paging mode currently\r\n");
+	}
+	status = 0;
+
+ out:
+	return status;
+
+ }
+
+
+ static int32_t shell_write_gpa(int32_t argc, char **argv)
+{
+	int32_t status = 0;
+	uint16_t vm_id;
+	struct acrn_vm *vm;
+	uint64_t addr;
+	uint64_t data64;
+
+ 	/* User input invalidation */
+	if (argc != 4) {
+		shell_puts("Please enter cmd with <vm_id, gpa_addr, data>\r\n");
+		status = -EINVAL;
+		goto out;
+	}
+
+ 	status = strtol_deci(argv[1]);
+	if (status < 0) {
+		goto out;
+	}
+	vm_id = (uint16_t)status;
+
+ 	addr = strtoul_hex(argv[2]);
+
+
+ 	data64 = strtoul_hex(argv[3]);
+
+ 	vm = get_vm_from_vmid(vm_id);
+	if (vm == NULL) {
+		shell_puts("No vm found in the input <vm_id, vcpu_id>\r\n");
+		status = -EINVAL;
+		goto out;
+	}
+
+ 	copy_to_gpa(vm, &data64, addr, 8U);
+
+ 	status = 0;
+
+ out:
+	return status;
 }

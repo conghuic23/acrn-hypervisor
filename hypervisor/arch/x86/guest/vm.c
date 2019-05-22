@@ -419,6 +419,7 @@ int32_t create_vm(uint16_t vm_id, struct acrn_vm_config *vm_config, struct acrn_
 	struct acrn_vm *vm = NULL;
 	int32_t status = 0;
 	bool need_cleanup = false;
+	uint32_t i;
 
 	/* Allocate memory for virtual machine */
 	vm = &vm_array[vm_id];
@@ -536,6 +537,16 @@ int32_t create_vm(uint16_t vm_id, struct acrn_vm_config *vm_config, struct acrn_
 			(void)memset(vm->arch_vm.nworld_eptp, 0U, PAGE_SIZE);
 		}
 	}
+
+	for (i = 0U; i < get_pcpu_nums(); i++) {
+		if (bitmap_test(i, &vm_config->pcpu_bitmap)) {
+			status = prepare_vcpu(vm, i);
+			if (status != 0) {
+				break;
+			}
+		}
+	}
+
 	return status;
 }
 
@@ -724,21 +735,9 @@ void resume_vm_from_s3(struct acrn_vm *vm, uint32_t wakeup_vec)
 void prepare_vm(uint16_t vm_id, struct acrn_vm_config *vm_config)
 {
 	int32_t err = 0;
-	uint16_t i;
 	struct acrn_vm *vm = NULL;
 
 	err = create_vm(vm_id, vm_config, &vm);
-
-	if (err == 0) {
-		for (i = 0U; i < get_pcpu_nums(); i++) {
-			if (bitmap_test(i, &vm_config->pcpu_bitmap)) {
-				err = prepare_vcpu(vm, i);
-				if (err != 0) {
-					break;
-				}
-			}
-		}
-	}
 
 	if (err == 0) {
 		if (is_prelaunched_vm(vm)) {

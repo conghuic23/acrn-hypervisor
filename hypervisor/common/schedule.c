@@ -13,6 +13,12 @@
 #include <schedule.h>
 #include <sprintf.h>
 
+bool sched_is_idle(struct sched_object *obj)
+{
+	uint16_t pcpu_id = obj->pcpu_id;
+	return (obj == &per_cpu(idle, pcpu_id));
+}
+
 /**
  * @pre obj != NULL
  */
@@ -32,7 +38,7 @@ void init_scheduler(void)
 
 		spinlock_init(&ctx->scheduler_lock);
 		ctx->flags = 0UL;
-		ctx->curr_obj = NULL;
+		ctx->current = NULL;
 	}
 }
 
@@ -65,6 +71,12 @@ void sched_remove(__unused struct sched_object *obj, uint16_t pcpu_id)
 static struct sched_object *get_next_sched_obj(struct sched_context *ctx)
 {
 	return ctx->sched_obj == NULL ? &get_cpu_var(idle) : ctx->sched_obj;
+}
+
+struct sched_object *sched_get_current(uint16_t pcpu_id)
+{
+	struct sched_context *ctx = &per_cpu(sched_ctx, pcpu_id);
+	return ctx->current;
 }
 
 /**
@@ -104,7 +116,7 @@ static void prepare_switch(struct sched_object *prev, struct sched_object *next)
 	}
 
 	/* update current object */
-	get_cpu_var(sched_ctx).curr_obj = next;
+	get_cpu_var(sched_ctx).current = next;
 
 	if ((next != NULL) && (next->switch_in != NULL)) {
 		next->switch_in(next);
@@ -116,7 +128,7 @@ void schedule(void)
 	uint16_t pcpu_id = get_pcpu_id();
 	struct sched_context *ctx = &per_cpu(sched_ctx, pcpu_id);
 	struct sched_object *next = NULL;
-	struct sched_object *prev = ctx->curr_obj;
+	struct sched_object *prev = ctx->current;
 
 	get_schedule_lock(pcpu_id);
 	next = get_next_sched_obj(ctx);
@@ -153,7 +165,7 @@ void switch_to_idle(sched_thread_t idle_thread)
 	idle->thread = idle_thread;
 	idle->switch_out = NULL;
 	idle->switch_in = NULL;
-	get_cpu_var(sched_ctx).curr_obj = idle;
+	get_cpu_var(sched_ctx).current = idle;
 
 	run_sched_thread(idle);
 }

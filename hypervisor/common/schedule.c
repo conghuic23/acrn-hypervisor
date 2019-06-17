@@ -39,6 +39,24 @@ static inline void sched_set_status(struct sched_object *obj, uint16_t status)
 	obj->status = status;
 }
 
+void get_schedule_lock(uint16_t pcpu_id)
+{
+	struct sched_context *ctx = &per_cpu(sched_ctx, pcpu_id);
+	spinlock_obtain(&ctx->scheduler_lock);
+}
+
+void release_schedule_lock(uint16_t pcpu_id)
+{
+	struct sched_context *ctx = &per_cpu(sched_ctx, pcpu_id);
+	spinlock_release(&ctx->scheduler_lock);
+}
+
+static struct acrn_scheduler *get_scheduler(uint16_t pcpu_id)
+{
+	struct sched_context *ctx = &per_cpu(sched_ctx, pcpu_id);
+	return ctx->scheduler;
+}
+
 /**
  * @pre obj != NULL
  */
@@ -55,37 +73,40 @@ void init_sched(uint16_t pcpu_id)
 	ctx->flags = 0UL;
 	ctx->current = NULL;
 	ctx->pcpu_id = pcpu_id;
+	ctx->scheduler = &sched_noop;
+	if (ctx->scheduler->init != NULL) {
+		ctx->scheduler->init(ctx);
+	}
 }
 
-void get_schedule_lock(uint16_t pcpu_id)
-{
-	struct sched_context *ctx = &per_cpu(sched_ctx, pcpu_id);
-	spinlock_obtain(&ctx->scheduler_lock);
-}
-
-void release_schedule_lock(uint16_t pcpu_id)
-{
-	struct sched_context *ctx = &per_cpu(sched_ctx, pcpu_id);
-	spinlock_release(&ctx->scheduler_lock);
-}
-
-void sched_insert(struct sched_object *obj, uint16_t pcpu_id)
+void deinit_sched(uint16_t pcpu_id)
 {
 	struct sched_context *ctx = &per_cpu(sched_ctx, pcpu_id);
 
-	ctx->sched_obj = obj;
+	if (ctx->scheduler->deinit != NULL) {
+		ctx->scheduler->deinit(ctx);
+	}
 }
 
-void sched_remove(__unused struct sched_object *obj, uint16_t pcpu_id)
+void sched_init_data(struct sched_object *obj)
 {
-	struct sched_context *ctx = &per_cpu(sched_ctx, pcpu_id);
-
-	ctx->sched_obj = NULL;
+	struct acrn_scheduler *scheduler = get_scheduler(obj->pcpu_id);
+	get_schedule_lock(obj->pcpu_id);
+	if (scheduler->init_data != NULL) {
+		scheduler->init_data(obj);
+	}
+	/* initial as BLOCKED status, so we can wake it up to run */
+	sched_set_status(obj, SCHED_STS_BLOCKED);
+	release_schedule_lock(obj->pcpu_id);
 }
 
-static struct sched_object *get_next_sched_obj(struct sched_context *ctx)
+void sched_deinit_data(struct sched_object *obj)
 {
-	return ctx->sched_obj == NULL ? &get_cpu_var(idle) : ctx->sched_obj;
+	struct acrn_scheduler *scheduler = get_scheduler(obj->pcpu_id);
+
+	if (scheduler->deinit_data != NULL) {
+		scheduler->deinit_data(obj);
+	}
 }
 
 struct sched_object *sched_get_current(uint16_t pcpu_id)
@@ -142,11 +163,13 @@ void schedule(void)
 {
 	uint16_t pcpu_id = get_pcpu_id();
 	struct sched_context *ctx = &per_cpu(sched_ctx, pcpu_id);
-	struct sched_object *next = NULL;
+	struct sched_object *next = &per_cpu(idle, pcpu_id);
 	struct sched_object *prev = ctx->current;
 
 	get_schedule_lock(pcpu_id);
-	next = get_next_sched_obj(ctx);
+	if (ctx->scheduler->pick_next != NULL) {
+		next = ctx->scheduler->pick_next(ctx);
+	}
 	bitmap_clear_lock(NEED_RESCHEDULE, &ctx->flags);
 
 	/* Don't change prev object's status if it's not running */
@@ -168,9 +191,12 @@ void schedule(void)
 void sched_sleep_obj(struct sched_object *obj)
 {
 	uint16_t pcpu_id = obj->pcpu_id;
+	struct acrn_scheduler *scheduler = get_scheduler(pcpu_id);
 
 	get_schedule_lock(pcpu_id);
-	sched_remove(obj, pcpu_id);
+	if (scheduler->sleep != NULL) {
+		scheduler->sleep(obj);
+	}
 	if (is_running(obj)) {
 		if (obj->notify_mode == SCHED_NOTIFY_INIT) {
 			make_reschedule_request(pcpu_id, DEL_MODE_INIT);
@@ -185,10 +211,13 @@ void sched_sleep_obj(struct sched_object *obj)
 void sched_wake_obj(struct sched_object *obj)
 {
 	uint16_t pcpu_id = obj->pcpu_id;
+	struct acrn_scheduler *scheduler = get_scheduler(pcpu_id);
 
 	get_schedule_lock(pcpu_id);
 	if (is_blocked(obj)) {
-		sched_insert(obj, pcpu_id);
+		if (scheduler->wake != NULL) {
+			scheduler->wake(obj);
+		}
 		sched_set_status(obj, SCHED_STS_RUNNABLE);
 		make_reschedule_request(pcpu_id, DEL_MODE_IPI);
 	}
@@ -217,6 +246,7 @@ void switch_to_idle(sched_thread_t idle_thread)
 	idle->switch_out = NULL;
 	idle->switch_in = NULL;
 	get_cpu_var(sched_ctx).current = idle;
+	sched_init_data(idle);
 	sched_set_status(idle, SCHED_STS_RUNNING);
 
 	run_sched_thread(idle);

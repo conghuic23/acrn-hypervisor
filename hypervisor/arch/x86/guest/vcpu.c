@@ -664,6 +664,7 @@ void reset_vcpu(struct acrn_vcpu *vcpu)
 		vlapic_reset(vlapic, apicv_ops);
 
 		reset_vcpu_regs(vcpu);
+		sched_init_data(&vcpu->sched_obj);
 	}
 }
 
@@ -734,17 +735,14 @@ static void context_switch_in(struct sched_object *next)
 	rstor_fxstore_guest_area(ectx);
 }
 
-void schedule_vcpu(struct acrn_vcpu *vcpu)
+void launch_vcpu(struct acrn_vcpu *vcpu)
 {
 	uint16_t pcpu_id = pcpuid_from_vcpu(vcpu);
 
 	vcpu->state = VCPU_RUNNING;
 	pr_dbg("vcpu%hu scheduled on pcpu%hu", vcpu->vcpu_id, pcpu_id);
 
-	get_schedule_lock(pcpu_id);
-	sched_insert(&vcpu->sched_obj, pcpu_id);
-	make_reschedule_request(pcpu_id, DEL_MODE_IPI);
-	release_schedule_lock(pcpu_id);
+	sched_wake_obj(&vcpu->sched_obj);
 }
 
 /* help function for vcpu create */
@@ -776,6 +774,7 @@ int32_t prepare_vcpu(struct acrn_vm *vm, uint16_t pcpu_id)
 		vcpu->sched_obj.host_sp = build_stack_frame(vcpu);
 		vcpu->sched_obj.switch_out = context_switch_out;
 		vcpu->sched_obj.switch_in = context_switch_in;
+		sched_init_data(&vcpu->sched_obj);
 	}
 
 	return ret;

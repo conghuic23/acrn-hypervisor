@@ -7,6 +7,7 @@
 #ifndef SCHEDULE_H
 #define SCHEDULE_H
 #include <spinlock.h>
+#include <vm_config.h>
 
 #define	NEED_RESCHEDULE		(1U)
 
@@ -92,6 +93,8 @@ void deinit_sched(uint16_t pcpu_id);
 void switch_to_idle(sched_thread_t idle_thread);
 void get_schedule_lock(uint16_t pcpu_id, uint64_t *rflag);
 void release_schedule_lock(uint16_t pcpu_id, uint64_t rflag);
+
+bool init_pcpu_schedulers(uint64_t pcpu_bitmap, const char *schedule_name);
 
 void sched_init_data(struct sched_object *obj);
 void sched_deinit_data(struct sched_object *obj);

@@ -601,6 +601,11 @@ void offline_vcpu(struct acrn_vcpu *vcpu)
 	vcpu->state = VCPU_OFFLINE;
 }
 
+void poke_vcpu(struct acrn_vcpu *vcpu)
+{
+	sched_poke_obj(&vcpu->sched_obj);
+}
+
 /*
 * @pre (&vcpu->stack[CONFIG_STACK_SIZE] & (CPU_STACK_ALIGN - 1UL)) == 0
 */

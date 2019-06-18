@@ -293,6 +293,17 @@ void sched_poke_obj(struct sched_object *obj)
 	release_schedule_lock(pcpu_id, rflag);
 }
 
+void sched_yield(void)
+{
+	uint16_t pcpu_id = get_pcpu_id();
+	struct sched_context *ctx = &per_cpu(sched_ctx, pcpu_id);
+
+	if (ctx->scheduler->yield != NULL) {
+		ctx->scheduler->yield(ctx);
+	}
+	make_reschedule_request(pcpu_id, DEL_MODE_IPI);
+}
+
 void run_sched_thread(struct sched_object *obj)
 {
 	if (obj->thread != NULL) {

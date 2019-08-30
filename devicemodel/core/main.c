@@ -140,7 +140,6 @@ usage(int code)
 		"       %*s [--logger-setting param_setting] <vm>\n"
 		"       -A: create ACPI tables\n"
 		"       -B: bootargs for kernel\n"
-		"       -c: # cpus (default 1)\n"
 		"       -E: elf image path\n"
 		"       -G: GVT args: low_gm_size, high_gm_size, fence_sz\n"
 		"       -h: help\n"
@@ -697,7 +696,6 @@ enum {
 
 static struct option long_options[] = {
 	{"acpi",		no_argument,		0, 'A' },
-	{"ncpus",		required_argument,	0, 'c' },
 	{"elf_file",		required_argument,	0, 'E' },
 	{"ioc_node",		required_argument,	0, 'i' },
 	{"lpc",			required_argument,	0, 'l' },
@@ -734,7 +732,7 @@ static struct option long_options[] = {
 	{0,			0,			0,  0  },
 };
 
-static char optstr[] = "hAWYvE:k:r:B:p:c:s:m:l:U:G:i:";
+static char optstr[] = "hAWYvE:k:r:B:p:s:m:l:U:G:i:";
 
 int
 main(int argc, char *argv[])
@@ -746,7 +744,7 @@ main(int argc, char *argv[])
 	int option_idx = 0;
 
 	progname = basename(argv[0]);
-	guest_ncpus = 1;
+	guest_ncpus = 0;
 	memsize = 256 * MB;
 	mptgen = 1;
 
@@ -768,8 +766,6 @@ main(int argc, char *argv[])
 		case 'A':
 			acpi = 1;
 			break;
-		case 'c':
-			dm_strtoi(optarg, NULL, 0, &guest_ncpus);
 			break;
 		case 'E':
 			if (acrn_parse_elf(optarg) != 0)

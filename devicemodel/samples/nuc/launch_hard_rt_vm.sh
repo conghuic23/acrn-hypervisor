@@ -30,7 +30,7 @@ echo ${passthru_vpid["sata"]} > /sys/bus/pci/drivers/pci-stub/new_id
 echo ${passthru_bdf["sata"]} > /sys/bus/pci/devices/${passthru_bdf["sata"]}/driver/unbind
 echo ${passthru_bdf["sata"]} > /sys/bus/pci/drivers/pci-stub/bind
 
-/usr/bin/acrn-dm -A -m $mem_size -c $1 -s 0:0,hostbridge \
+/usr/bin/acrn-dm -A -m $mem_size -s 0:0,hostbridge \
   -k /usr/lib/kernel/default-iot-lts2018-preempt-rt \
    --lapic_pt \
    --rtvm \
@@ -53,4 +53,4 @@ for i in `ls -d /sys/devices/system/cpu/cpu[1-99]`; do
         fi
 done
 
-launch_hard_rt_vm 1
+launch_hard_rt_vm

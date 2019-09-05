@@ -74,8 +74,9 @@ static void sched_tick_handler(void *param)
 	struct list_head *pos;
 	uint16_t pcpu_id = get_pcpu_id();
 	uint64_t now = rdtsc();
+	uint64_t rflag;
 
-	get_schedule_lock(pcpu_id);
+	get_schedule_lock(pcpu_id, &rflag);
 	current = ctx->current;
 
 	/* replenish sched_objects with slice_cycles, then reorder the runqueue according left_cycles */
@@ -92,7 +93,7 @@ static void sched_tick_handler(void *param)
 
 	/* If no vCPU start scheduling, ignore this tick */
 	if (current == NULL || (sched_is_idle(current) && list_empty(&rr_ctx->runqueue))) {
-		release_schedule_lock(pcpu_id);
+		release_schedule_lock(pcpu_id, rflag);
 		return;
 	}
 	data = (struct sched_rr_data *)current->data;
@@ -105,7 +106,7 @@ static void sched_tick_handler(void *param)
 	if (sched_is_idle(current) || data->left_cycles <= 0) {
 		make_reschedule_request(pcpu_id, DEL_MODE_IPI);
 	}
-	release_schedule_lock(pcpu_id);
+	release_schedule_lock(pcpu_id, rflag);
 }
 
 int sched_rr_init(struct sched_context *ctx)
@@ -142,16 +143,6 @@ void sched_rr_init_data(struct sched_object *obj)
 	data = (struct sched_rr_data *)obj->data;
 	INIT_LIST_HEAD(&data->list);
 	data->left_cycles = data->slice_cycles = CONFIG_SLICE_MS * CYCLES_PER_MS;
-}
-
-void sched_rr_insert(struct sched_object *obj)
-{
-	runqueue_add_tail(obj);
-}
-
-void sched_rr_remove(struct sched_object *obj)
-{
-	queue_remove(obj);
 }
 
 static struct sched_object *sched_rr_pick_next(struct sched_context *ctx)
@@ -219,12 +210,10 @@ struct acrn_scheduler sched_rr = {
 	.name		= "sched_rr",
 	.init		= sched_rr_init,
 	.init_data	= sched_rr_init_data,
-	.insert		= sched_rr_insert,
 	.pick_next	= sched_rr_pick_next,
 	.yield		= sched_rr_yield,
 	.sleep		= sched_rr_sleep,
 	.wake		= sched_rr_wake,
 	.poke		= sched_rr_poke,
-	.remove		= sched_rr_remove,
 	.deinit		= sched_rr_deinit,
 };

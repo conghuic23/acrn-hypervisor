@@ -269,6 +269,7 @@ add_cpu(struct vmctx *ctx, int guest_ncpus)
 
 		mt_vmm_info[i].mt_ctx = ctx;
 		mt_vmm_info[i].mt_vcpu = i;
+		printf("add_cpu %d \n", i);
 
 		pthread_create(&mt_vmm_info[i].mt_thr, NULL,
 				start_thread, &mt_vmm_info[i]);
@@ -276,6 +277,7 @@ add_cpu(struct vmctx *ctx, int guest_ncpus)
 
 	vm_set_vcpu_regs(ctx, &ctx->bsp_regs);
 
+	printf("vm_run start\n");
 	if (vm_run(ctx) != 0) {
 		pr_err("%s, failed to run VM.\n", __func__);
 		error = -1;

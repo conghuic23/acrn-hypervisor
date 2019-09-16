@@ -151,6 +151,7 @@ int32_t hcall_create_vm(struct acrn_vm *vm, uint64_t param)
 	struct acrn_vm *target_vm = NULL;
 	struct acrn_create_vm cv;
 	struct acrn_vm_config* vm_config = NULL;
+	int i;
 
 	(void)memset((void *)&cv, 0U, sizeof(cv));
 	if (copy_from_gpa(vm, &cv, param, sizeof(cv)) == 0) {
@@ -177,6 +178,9 @@ int32_t hcall_create_vm(struct acrn_vm *vm, uint64_t param)
 					/* return a relative vm_id from SOS view */
 					cv.vmid = vmid_2_rel_vmid(vm->vm_id, vm_id);
 					cv.vcpu_num = vm_config->vcpu_num;
+					for (i=0; i< cv.vcpu_num; i++) {
+						cv.vcpu_affinity[i] = vm_config->vcpu_affinity[i];
+					}
 					ret = 0;
 				}
 

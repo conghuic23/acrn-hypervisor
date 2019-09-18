@@ -48,11 +48,12 @@ struct acrn_vm_config vm_configs[CONFIG_MAX_VM_NUM] = {
 			 0x86U, 0x4eU, 0xcbU, 0x7aU, 0x18U, 0xb3U, 0x46U, 0x43U},
 			/* d2795438-25d6-11e8-864e-cb7a18b34643 */
 		.scheduler = "sched_rr",
-		.vcpu_num = 1U,
-		.vcpu_affinity = {1U << 3 },
+		.vcpu_num = 3U,
+		.vcpu_affinity = {1U<<0, 1<<1, 1<<2},
 		.vuart[0] = {
 			.type = VUART_LEGACY_PIO,
-			.addr.port_base = INVALID_COM_BASE,
+			.addr.port_base = COM1_BASE,
+			.irq = COM1_IRQ,
 		},
 		.vuart[1] = {
 			.type = VUART_LEGACY_PIO,

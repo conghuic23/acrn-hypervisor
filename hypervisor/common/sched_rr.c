@@ -8,7 +8,7 @@
 #include <per_cpu.h>
 #include <schedule.h>
 
-#define CONFIG_SLICE_MS 10UL
+#define CONFIG_SLICE_MS 5UL
 struct sched_rr_data {
 	/* keep list as the first item */
 	struct list_head list;
@@ -112,7 +112,7 @@ static void sched_tick_handler(void *param)
 int sched_rr_init(struct sched_context *ctx)
 {
 	struct sched_rr_context *rr_ctx = &per_cpu(sched_rr_ctx, ctx->pcpu_id);
-	uint64_t tick_period = CONFIG_SLICE_MS * CYCLES_PER_MS / 2;
+	uint64_t tick_period = 1 * CYCLES_PER_MS;
 	int ret = 0;
 
 	ctx->priv = rr_ctx;

@@ -1286,20 +1286,48 @@ static int32_t shell_cpuid(int32_t argc, char **argv)
 
 	return 0;
 }
+ 
 
+extern void acrn_print_request(uint16_t vcpu_id, const struct vhm_request *req);
 static int32_t shell_trigger_crash(int32_t argc, char **argv)
 {
 	char str[MAX_STR_SIZE] = {0};
+	uint16_t idx, i;
+	union vhm_request_buffer *req_buf = NULL;
+	struct vhm_request *vhm_req;
+	struct acrn_vm *vm;
+	struct acrn_vcpu *vcpu;
+	uint16_t vcpu_id;
 
-	(void)argc;
-	(void)argv;
+	if (argc == 2) {
+		vcpu_id = (uint32_t)strtoul_hex(argv[1]);
+		vm = get_vm_from_vmid(0);
+		vcpu = vcpu_from_vid(vm, vcpu_id);
+		snprintf(str, MAX_STR_SIZE, "inject to vm%d vcpu%d\n", 0, vcpu_id);
+		shell_puts(str);
+		vlapic_set_intr(vcpu, get_vhm_notification_vector(), LAPIC_TRIG_EDGE);
+
+	} else {
+	for (idx = 1U; idx < CONFIG_MAX_VM_NUM; idx++) {
+		vm = get_vm_from_vmid(idx);
+		if (is_poweroff_vm(vm)) {
+			continue;
+		}
+		req_buf = (union vhm_request_buffer *)(vm->sw.io_shared_page);
+		foreach_vcpu(i, vm, vcpu) {
+			vhm_req = &req_buf->req_queue[vcpu->vcpu_id];
+			acrn_print_request(vcpu->vcpu_id, vhm_req);
+		}
+	}
+	}
+/*	
 	snprintf(str, MAX_STR_SIZE, "trigger crash, divide by 0 ...\r\n");
 	shell_puts(str);
 
 	asm("movl $0x1, %eax");
 	asm("movl $0x0, %ecx");
 	asm("idiv  %ecx");
-
+*/
 	return 0;
 }
 

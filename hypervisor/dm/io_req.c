@@ -18,13 +18,13 @@ static uint32_t acrn_vhm_notification_vector = VECTOR_HYPERVISOR_CALLBACK_VHM;
 #define MMIO_DEFAULT_VALUE_SIZE_8	(0xFFFFFFFFFFFFFFFFUL)
 
 #if defined(HV_DEBUG)
-static void acrn_print_request(uint16_t vcpu_id, const struct vhm_request *req)
+void acrn_print_request(uint16_t vcpu_id, const struct vhm_request *req)
 {
+	pr_info("acrn_print_request");
 	switch (req->type) {
 	case REQ_MMIO:
-		dev_dbg(ACRN_DBG_IOREQUEST, "[vcpu_id=%hu type=MMIO]", vcpu_id);
-		dev_dbg(ACRN_DBG_IOREQUEST,
-			"gpa=0x%lx, R/W=%d, size=%ld value=0x%lx processed=%lx",
+		pr_err("[vcpu_id=%hu type=MMIO]", vcpu_id);
+		pr_err("gpa=0x%lx, R/W=%d, size=%ld value=0x%lx processed=%lx",
 			req->reqs.mmio.address,
 			req->reqs.mmio.direction,
 			req->reqs.mmio.size,
@@ -32,9 +32,8 @@ static void acrn_print_request(uint16_t vcpu_id, const struct vhm_request *req)
 			req->processed);
 		break;
 	case REQ_PORTIO:
-		dev_dbg(ACRN_DBG_IOREQUEST, "[vcpu_id=%hu type=PORTIO]", vcpu_id);
-		dev_dbg(ACRN_DBG_IOREQUEST,
-			"IO=0x%lx, R/W=%d, size=%ld value=0x%lx processed=%lx",
+		pr_err("[vcpu_id=%hu type=PORTIO]", vcpu_id);
+		pr_err("IO=0x%lx, R/W=%d, size=%ld value=0x%lx processed=%lx",
 			req->reqs.pio.address,
 			req->reqs.pio.direction,
 			req->reqs.pio.size,
@@ -42,7 +41,7 @@ static void acrn_print_request(uint16_t vcpu_id, const struct vhm_request *req)
 			req->processed);
 		break;
 	default:
-		dev_dbg(ACRN_DBG_IOREQUEST, "[vcpu_id=%hu type=%d] NOT support type",
+		pr_err("[vcpu_id=%hu type=%d] NOT support type",
 			vcpu_id, req->type);
 		break;
 	}
@@ -124,7 +123,7 @@ int32_t acrn_insert_request(struct acrn_vcpu *vcpu, const struct io_request *io_
 
 #if defined(HV_DEBUG)
 		stac();
-		acrn_print_request(vcpu->vcpu_id, vhm_req);
+		//acrn_print_request(vcpu->vcpu_id, vhm_req);
 		clac();
 #endif
 
@@ -146,10 +145,8 @@ int32_t acrn_insert_request(struct acrn_vcpu *vcpu, const struct io_request *io_
 				}
 				asm_pause();
 			}
-		} else if (need_reschedule(pcpuid_from_vcpu(vcpu))) {
-			schedule();
 		} else {
-			ret = -EINVAL;
+			schedule();
 		}
 	} else {
 		ret = -EINVAL;

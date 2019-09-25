@@ -71,7 +71,7 @@ static void sched_tick_handler(void *param)
 	struct sched_rr_context *rr_ctx = (struct sched_rr_context *)ctx->priv;
 	struct sched_rr_data *data;
 	struct sched_object *current, *obj;
-	struct list_head *pos;
+	struct list_head *pos, *tmp;
 	uint16_t pcpu_id = get_pcpu_id();
 	uint64_t now = rdtsc();
 	uint64_t rflag;
@@ -80,7 +80,7 @@ static void sched_tick_handler(void *param)
 	current = ctx->current;
 
 	/* replenish sched_objects with slice_cycles, then reorder the runqueue according left_cycles */
-	list_for_each(pos, &rr_ctx->runqueue) {
+	list_for_each_safe(pos, tmp, &rr_ctx->runqueue) {
 		obj = list_entry(pos, struct sched_object, data);
 		data = (struct sched_rr_data *)obj->data;
 		if (data->left_cycles > 0) {
@@ -142,7 +142,12 @@ void sched_rr_init_data(struct sched_object *obj)
 	ASSERT(sizeof(struct sched_rr_data) < sizeof(obj->data), "sched_rr data size too large!");
 	data = (struct sched_rr_data *)obj->data;
 	INIT_LIST_HEAD(&data->list);
-	data->left_cycles = data->slice_cycles = CONFIG_SLICE_MS * CYCLES_PER_MS;
+	if (obj->vm_id == 0) {
+		data->left_cycles = data->slice_cycles = 1 * CYCLES_PER_MS;
+	} else {
+	
+		data->left_cycles = data->slice_cycles = CONFIG_SLICE_MS * CYCLES_PER_MS;
+	}
 }
 
 static struct sched_object *sched_rr_pick_next(struct sched_context *ctx)
@@ -159,9 +164,9 @@ static struct sched_object *sched_rr_pick_next(struct sched_context *ctx)
 	if (!sched_is_idle(current) && is_active(current)) {
 		data->left_cycles -= now - data->last_cycles;
 		queue_remove(current);
-		runqueue_add_tail(current);
+		//runqueue_add_tail(current);
+		list_add_tail(&data->list, &rr_ctx->runqueue);
 	}
-
 
 	/* Pick the next runnable sched object
 	 * 1) get the first item in runqueue firstly

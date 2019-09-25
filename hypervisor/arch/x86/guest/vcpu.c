@@ -779,6 +779,8 @@ int32_t prepare_vcpu(struct acrn_vm *vm, uint16_t pcpu_id)
 		vcpu->sched_obj.host_sp = build_stack_frame(vcpu);
 		vcpu->sched_obj.switch_out = context_switch_out;
 		vcpu->sched_obj.switch_in = context_switch_in;
+		vcpu->sched_obj.vcpu_id = vcpu->vcpu_id;
+		vcpu->sched_obj.vm_id = vm->vm_id;
 		sched_init_data(&vcpu->sched_obj);
 	}
 

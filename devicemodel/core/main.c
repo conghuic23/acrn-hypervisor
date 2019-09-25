@@ -240,7 +240,7 @@ start_thread(void *param)
 	thread = pthread_self();
 	pcpu_num = get_nprocs_conf();
 	CPU_ZERO(&cpuset);
-	CPU_SET(vcpu % pcpu_num, &cpuset);
+	CPU_SET(vcpu + 1 % pcpu_num, &cpuset);
 
 	snprintf(tname, sizeof(tname), "vcpu %d", vcpu);
 	pthread_setname_np(thread, tname);
@@ -264,12 +264,12 @@ add_cpu(struct vmctx *ctx, int guest_ncpus)
 		return ctx->ioreq_client;
 	}
 
-	for (i = 0; i < guest_ncpus; i++) {
+	for (i = 1; i < guest_ncpus+1; i++) {
 		CPU_SET_ATOMIC(i, &cpumask);
 
+		printf("!!! hardcode!!! add_cpu %d \n", i);
 		mt_vmm_info[i].mt_ctx = ctx;
-		mt_vmm_info[i].mt_vcpu = i;
-		printf("add_cpu %d \n", i);
+		mt_vmm_info[i].mt_vcpu = i-1;
 
 		pthread_create(&mt_vmm_info[i].mt_thr, NULL,
 				start_thread, &mt_vmm_info[i]);

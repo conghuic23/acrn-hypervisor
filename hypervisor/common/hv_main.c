@@ -45,7 +45,7 @@ void vcpu_thread(struct sched_object *obj)
 			schedule();
 		}
 
-		profiling_vmenter_handler(vcpu);
+		//profiling_vmenter_handler(vcpu);
 
 		TRACE_2L(TRACE_VM_ENTER, 0UL, 0UL);
 		ret = run_vcpu(vcpu);
@@ -60,7 +60,7 @@ void vcpu_thread(struct sched_object *obj)
 
 		vcpu->arch.nrexits++;
 
-		profiling_pre_vmexit_handler(vcpu);
+		//profiling_pre_vmexit_handler(vcpu);
 
 		if (!is_lapic_pt_enabled(vcpu)) {
 			CPU_IRQ_ENABLE();
@@ -74,7 +74,7 @@ void vcpu_thread(struct sched_object *obj)
 			continue;
 		}
 
-		profiling_post_vmexit_handler(vcpu);
+		//profiling_post_vmexit_handler(vcpu);
 	} while (1);
 }
 

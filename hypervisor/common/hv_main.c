@@ -47,7 +47,7 @@ void vcpu_thread(struct sched_object *obj)
 
 		//profiling_vmenter_handler(vcpu);
 
-		TRACE_2L(TRACE_VM_ENTER, 0UL, 0UL);
+		TRACE_2L(TRACE_VM_ENTER, vcpu->vm->vm_id, vcpu->vcpu_id);
 		ret = run_vcpu(vcpu);
 		if (ret != 0) {
 			pr_fatal("vcpu resume failed");
@@ -56,7 +56,8 @@ void vcpu_thread(struct sched_object *obj)
 			schedule();
 		}
 		basic_exit_reason = vcpu->arch.exit_reason & 0xFFFFU;
-		TRACE_2L(TRACE_VM_EXIT, basic_exit_reason, vcpu_get_rip(vcpu));
+		TRACE_4I(TRACE_VM_EXIT, basic_exit_reason, 0, vcpu->vm->vm_id, vcpu->vcpu_id);
+		TRACE_2L(TRACE_VM_EXIT_RIP, vcpu_get_rip(vcpu), 0);
 
 		vcpu->arch.nrexits++;
 

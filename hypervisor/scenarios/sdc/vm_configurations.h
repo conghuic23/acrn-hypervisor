@@ -15,12 +15,17 @@
 #define DM_OWNED_GUEST_FLAG_MASK	(GUEST_FLAG_SECURE_WORLD_ENABLED | GUEST_FLAG_LAPIC_PASSTHROUGH | \
 						GUEST_FLAG_RT | GUEST_FLAG_IO_COMPLETION_POLLING)
 
+					//"isolcpus=1-3 "
+					//"processor.max_cstate=2 "
 #define SOS_VM_BOOTARGS			SOS_ROOTFS	\
 					"rw rootwait "	\
 					"console=tty0 " \
 					SOS_CONSOLE	\
 					"consoleblank=0 "	\
 					"no_timer_check "	\
+					"processor.max_cstate=2 " \
+					"isolcpus=1-3 " \
+					"cpuidle_sysfs_switch " \
 					"quiet loglevel=3 "	\
 					"i915.nuclear_pageflip=1 " \
 					"i915.avail_planes_per_pipe=0x01010F "	\

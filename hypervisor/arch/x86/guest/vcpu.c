@@ -774,6 +774,8 @@ int32_t prepare_vcpu(struct acrn_vm *vm, uint16_t pcpu_id)
 		vcpu->sched_obj.ctx = &per_cpu(sched_ctx, pcpu_id);
 		vcpu->sched_obj.thread = vcpu_thread;
 		vcpu->sched_obj.pcpu_id = pcpu_id;
+		vcpu->sched_obj.vm_id = vm->vm_id;
+		vcpu->sched_obj.vcpu_id = vcpu->vcpu_id;
 		vcpu->sched_obj.notify_mode = is_lapic_pt_enabled(vcpu) ?
 			SCHED_NOTIFY_INIT : SCHED_NOTIFY_IPI;
 		vcpu->sched_obj.host_sp = build_stack_frame(vcpu);

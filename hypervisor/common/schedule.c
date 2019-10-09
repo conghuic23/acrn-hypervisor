@@ -13,6 +13,7 @@
 #include <lapic.h>
 #include <schedule.h>
 #include <sprintf.h>
+#include <trace.h>
 
 static struct acrn_scheduler *schedulers[SCHEDULER_MAX_NUMBER] = {
 	&sched_noop,
@@ -227,11 +228,13 @@ void schedule(void)
 	/* If we picked different sched object, switch context */
 	if (prev != next) {
 		if ((prev != NULL) && (prev->switch_out != NULL)) {
+			TRACE_4I(TRACE_PCPU_SCHED_END, prev->pcpu_id, prev->vm_id, prev->vcpu_id, 0);
 			prev->switch_out(prev);
 		}
 
 		if ((next != NULL) && (next->switch_in != NULL)) {
 			next->switch_in(next);
+			TRACE_4I(TRACE_PCPU_SCHED_START, next->pcpu_id, next->vm_id, next->vcpu_id, 0);
 		}
 
 		arch_switch_to(&prev->host_sp, &next->host_sp);
@@ -323,6 +326,8 @@ void switch_to_idle(sched_thread_t idle_thread)
 	snprintf(idle_name, 16U, "idle%hu", pcpu_id);
 	(void)strncpy_s(idle->name, 16U, idle_name, 16U);
 	idle->pcpu_id = pcpu_id;
+	idle->vm_id = 0xFF;
+	idle->vcpu_id =0xFF;
 	idle->thread = idle_thread;
 	idle->switch_out = NULL;
 	idle->switch_in = NULL;

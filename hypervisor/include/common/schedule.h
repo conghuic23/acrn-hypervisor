@@ -36,6 +36,8 @@ typedef void (*switch_t)(struct sched_object *obj);
 struct sched_object {
 	char name[16];
 	uint16_t pcpu_id;
+	uint16_t vm_id;
+	uint16_t vcpu_id;
 	struct sched_context *ctx;
 	sched_thread_t thread;
 	volatile enum sched_object_state status;

@@ -162,7 +162,8 @@ static struct sched_object *sched_rr_pick_next(struct sched_context *ctx)
 	if (!sched_is_idle(current) && is_active(current)) {
 		data->left_cycles -= now - data->last_cycles;
 		queue_remove(current);
-		runqueue_add_tail(current);
+		//runqueue_add_tail(current);
+		list_add_tail(&data->list, &rr_ctx->runqueue);
 	}
 
 

@@ -1,6 +1,6 @@
 choice
 	prompt "ACRN Scenario"
-	default SDC
+	default SDC2
 	help
 	  Select the scenario name to load corresponding VM configuration.
 

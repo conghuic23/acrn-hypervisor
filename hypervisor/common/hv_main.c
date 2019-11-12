@@ -98,6 +98,7 @@ void run_idle_thread(void)
 	uint16_t pcpu_id = get_pcpu_id();
 	struct thread_object *idle = &per_cpu(idle, pcpu_id);
 	char idle_name[16];
+	uint64_t now = rdtsc();
 
 	snprintf(idle_name, 16U, "idle%hu", pcpu_id);
 	(void)strncpy_s(idle->name, 16U, idle_name, 16U);
@@ -105,6 +106,9 @@ void run_idle_thread(void)
 	idle->thread_entry = default_idle;
 	idle->switch_out = NULL;
 	idle->switch_in = NULL;
+	idle->stats.start_time = now;
+	idle->stats.vm_id = CONFIG_MAX_VM_NUM;
+	idle->stats.vcpu_id = MAX_VCPUS_PER_VM;
 
 	run_thread(idle);
 

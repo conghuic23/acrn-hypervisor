@@ -12,6 +12,8 @@
 #include <lapic.h>
 #include <schedule.h>
 #include <sprintf.h>
+#include <trace.h>
+#include <logmsg.h>
 
 bool is_idle_thread(const struct thread_object *obj)
 {
@@ -159,6 +161,7 @@ void schedule(void)
 	struct thread_object *next = &per_cpu(idle, pcpu_id);
 	struct thread_object *prev = ctl->curr_obj;
 	uint64_t rflag;
+	uint64_t now = rdtsc();
 
 	obtain_schedule_lock(pcpu_id, &rflag);
 	if (ctl->scheduler->pick_next != NULL) {
@@ -178,9 +181,18 @@ void schedule(void)
 	if (prev != next) {
 		if ((prev != NULL) && (prev->switch_out != NULL)) {
 			prev->switch_out(prev);
+			if (prev->stats.start_time !=0 && prev->stats.start_time < now) {
+				prev->stats.runtime += now - prev->stats.start_time;
+			}
+			TRACE_4I(TRACE_PCPU_SCHED_END, prev->pcpu_id,
+					prev->stats.vm_id, prev->stats.vcpu_id, 0);
 		}
 
 		if ((next != NULL) && (next->switch_in != NULL)) {
+			TRACE_4I(TRACE_PCPU_SCHED_START, next->pcpu_id,
+					next->stats.vm_id, next->stats.vcpu_id, 0);
+			next->stats.context_switch_times += 1U;
+			next->stats.start_time = now;
 			next->switch_in(next);
 		}
 
@@ -274,3 +286,4 @@ void run_thread(struct thread_object *obj)
 		obj->thread_entry(obj);
 	}
 }
+

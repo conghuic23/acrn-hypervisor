@@ -185,11 +185,13 @@ static struct thread_object *sched_iorr_pick_next(struct sched_control *ctl)
 static void sched_iorr_sleep(struct thread_object *obj)
 {
 	runqueue_remove(obj);
+	obj->stats.sleep++;
 }
 
 static void sched_iorr_wake(struct thread_object *obj)
 {
 	runqueue_add_head(obj);
+	obj->stats.wake++;
 }
 
 struct acrn_scheduler sched_iorr = {

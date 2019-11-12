@@ -98,6 +98,10 @@ struct shell {
 #define SHELL_CMD_CPUID_PARAM		"<leaf> [subleaf]"
 #define SHELL_CMD_CPUID_HELP		"Display the CPUID leaf [subleaf], in hexadecimal"
 
+#define SHELL_CMD_SCHED			"sched"
+#define SHELL_CMD_SCHED_PARAM		"<command> [params]"
+#define SHELL_CMD_SCHED_HELP		"Display the stats info in scheduler"
+
 #define SHELL_CMD_RDMSR			"rdmsr"
 #define SHELL_CMD_RDMSR_PARAM		"[-p<pcpu_id>]	<msr_index>"
 #define SHELL_CMD_RDMSR_HELP		"Read the MSR at msr_index (in hexadecimal) for CPU ID pcpu_id"

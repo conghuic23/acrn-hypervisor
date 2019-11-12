@@ -28,6 +28,17 @@ enum sched_notify_mode {
 	SCHED_NOTIFY_IPI
 };
 
+/* For debug purpose */
+struct sched_stats {
+	uint64_t sleep;
+	uint64_t wake;
+	uint64_t runtime;
+	uint64_t context_switch_times;
+	uint64_t start_time;
+	uint16_t vcpu_id;
+	uint16_t vm_id;
+};
+
 struct thread_object;
 typedef void (*thread_entry_t)(struct thread_object *obj);
 typedef void (*switch_t)(struct thread_object *obj);
@@ -44,6 +55,7 @@ struct thread_object {
 	switch_t switch_in;
 
 	uint8_t data[THREAD_DATA_SIZE];
+	struct sched_stats stats;
 };
 
 struct sched_control {

@@ -21,6 +21,7 @@
 #include <version.h>
 #include <shell.h>
 #include <vmcs.h>
+#include <schedule.h>
 
 #define TEMP_STR_SIZE		60U
 #define MAX_STR_SIZE		256U
@@ -48,6 +49,7 @@ static int32_t shell_show_vioapic_info(int32_t argc, char **argv);
 static int32_t shell_show_ioapic_info(__unused int32_t argc, __unused char **argv);
 static int32_t shell_loglevel(int32_t argc, char **argv);
 static int32_t shell_cpuid(int32_t argc, char **argv);
+static int32_t shell_sched(__unused int32_t argc, __unused char **argv);
 static int32_t shell_trigger_crash(int32_t argc, char **argv);
 static int32_t shell_rdmsr(int32_t argc, char **argv);
 static int32_t shell_wrmsr(int32_t argc, char **argv);
@@ -136,6 +138,12 @@ static struct shell_cmd shell_cmds[] = {
 		.cmd_param	= SHELL_CMD_CPUID_PARAM,
 		.help_str	= SHELL_CMD_CPUID_HELP,
 		.fcn		= shell_cpuid,
+	},
+	{
+		.str		= SHELL_CMD_SCHED,
+		.cmd_param	= SHELL_CMD_SCHED_PARAM,
+		.help_str	= SHELL_CMD_SCHED_HELP,
+		.fcn		= shell_sched,
 	},
 	{
 		.str		= SHELL_CMD_REBOOT,
@@ -1367,6 +1375,35 @@ static int32_t shell_cpuid(int32_t argc, char **argv)
 	return 0;
 }
 
+static int32_t shell_sched(__unused int32_t argc, __unused char **argv)
+{
+	struct acrn_vm *vm;
+	struct acrn_vcpu *vcpu;
+	struct sched_stats *stats;
+	uint16_t i;
+	uint16_t idx;
+	char str[MAX_STR_SIZE] = {0};
+
+
+	for (idx = 0U; idx < CONFIG_MAX_VM_NUM; idx++) {
+		vm = get_vm_from_vmid(idx);
+		foreach_vcpu(i, vm, vcpu) {
+			stats = &vcpu->thread_obj.stats;
+			/* show stats */
+			snprintf(str, MAX_STR_SIZE, "[%s]\t runtime:%u(ms)\t sleep:%u\t wake:%u switchs:%u \r\n",
+					vcpu->thread_obj.name,
+					ticks_to_ms(stats->runtime), stats->sleep,stats->wake, stats->context_switch_times);
+			shell_puts(str);
+			/* clear stats */
+			stats->runtime = 0;
+			stats->sleep = 0;
+			stats->wake = 0;
+			stats->context_switch_times = 0;
+		}
+	}
+
+	return 0;
+}
 static int32_t shell_trigger_crash(int32_t argc, char **argv)
 {
 	char str[MAX_STR_SIZE] = {0};

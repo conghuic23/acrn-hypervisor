@@ -164,6 +164,9 @@ void schedule(void)
 	uint64_t now = rdtsc();
 
 	obtain_schedule_lock(pcpu_id, &rflag);
+	if (ctl->scheduler->schedule != NULL) {
+		ctl->scheduler->schedule(ctl);
+	}
 	if (ctl->scheduler->pick_next != NULL) {
 		next = ctl->scheduler->pick_next(ctl);
 	}

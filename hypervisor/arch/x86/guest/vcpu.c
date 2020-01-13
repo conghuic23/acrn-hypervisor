@@ -266,6 +266,7 @@ static void init_xsave(struct acrn_vcpu *vcpu)
 	struct xsave_area *area = &ectx->xs_area;
 
 	ectx->xcr0 = XSAVE_FPU;
+	ectx->xcr0_used = ectx->xcr0;
 	ectx->xss = 0U;
 	(void)memset((void *)area, 0U, XSAVE_STATE_AREA_SIZE);
 
@@ -273,6 +274,23 @@ static void init_xsave(struct acrn_vcpu *vcpu)
 	 * keep the reset area in header area as zero.
 	 */
 	ectx->xs_area.xsave_hdr.hdr.xcomp_bv |= XSAVE_COMPACTED_FORMAT;
+}
+
+void update_xcr0(struct acrn_vcpu *vcpu, uint64_t val)
+{
+	struct ext_context *ectx = &(vcpu->arch.contexts[vcpu->arch.cur_context].ext_ctx);
+	uint64_t new_mask;
+
+	new_mask = (~(ectx->xcr0_used)) & val;
+	/* update xcr0 used bitmap */
+	ectx->xcr0_used |= val;
+	write_xcr(0, val);
+	/* save new xcr0 */
+	ectx->xcr0 = val;
+	if (new_mask != 0U) {
+		/* rstore data from current vcpu xsave region */
+		xrstors(&ectx->xs_area, UINT64_MAX);
+	}
 }
 
 void set_vcpu_regs(struct acrn_vcpu *vcpu, struct acrn_vcpu_regs *vcpu_regs)
@@ -743,16 +761,18 @@ void zombie_vcpu(struct acrn_vcpu *vcpu, enum vcpu_state new_state)
 
 void save_xsave_area(struct ext_context *ectx)
 {
-	ectx->xcr0 = read_xcr(0);
 	ectx->xss = msr_read(MSR_IA32_XSS);
+	write_xcr(0, ectx->xcr0_used);
 	xsaves(&ectx->xs_area, UINT64_MAX);
+	write_xcr(0, ectx->xcr0);
 }
 
 void rstore_xsave_area(const struct ext_context *ectx)
 {
-	write_xcr(0, ectx->xcr0);
+	write_xcr(0, ectx->xcr0_used);
 	msr_write(MSR_IA32_XSS, ectx->xss);
 	xrstors(&ectx->xs_area, UINT64_MAX);
+	write_xcr(0, ectx->xcr0);
 }
 
 /* TODO:

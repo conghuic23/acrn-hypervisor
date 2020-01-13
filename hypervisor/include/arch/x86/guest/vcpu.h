@@ -581,6 +581,7 @@ struct acrn_vcpu *get_ever_run_vcpu(uint16_t pcpu_id);
 
 void save_xsave_area(struct ext_context *ectx);
 void rstore_xsave_area(const struct ext_context *ectx);
+void update_xcr0(struct acrn_vcpu *vcpu, uint64_t val);
 
 /**
  * @brief create a vcpu for the target vm

@@ -366,7 +366,7 @@ static int32_t xsetbv_vmexit_handler(struct acrn_vcpu *vcpu)
 						if ((val64 & (XCR0_BNDREGS | XCR0_BNDCSR)) != 0UL) {
 							vcpu_inject_gp(vcpu, 0U);
 						} else {
-							write_xcr(0, val64);
+							update_xcr0(vcpu, val64);
 						}
 					}
 				}

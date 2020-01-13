@@ -402,6 +402,7 @@ struct ext_context {
 
 	struct xsave_area xs_area;
 	uint64_t xcr0;
+	uint64_t xcr0_used;
 	uint64_t xss;
 };
 

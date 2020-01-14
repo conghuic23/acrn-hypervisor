@@ -9,7 +9,7 @@
 #include <schedule.h>
 
 #define CONFIG_MCU 1UL
-#define CONFIG_MCU_NUM 5UL
+#define CONFIG_MCU_NUM 10UL
 struct sched_bvt_data {
 	/* keep list as the first item */
 	struct list_head list;
@@ -19,7 +19,7 @@ struct sched_bvt_data {
 	/* 1 ~ 100 */
 	uint16_t weight;
 	uint64_t cs_allow;
-	uint64_t count_down;
+	int64_t count_down;
 	int64_t svt;
 	int64_t avt;
 	int64_t evt;
@@ -40,6 +40,21 @@ bool is_inqueue(struct thread_object *obj)
 {
 	struct sched_bvt_data *data = (struct sched_bvt_data *)obj->data;
 	return !list_empty(&data->list);
+}
+
+int64_t get_svt(struct thread_object *obj)
+{
+	struct sched_bvt_control *bvt_ctl = (struct sched_bvt_control *)obj->sched_ctl->priv;
+	struct sched_bvt_data *obj_data; 
+	struct thread_object *tmp_obj;
+	int64_t svt = 0;
+
+	if (!list_empty(&bvt_ctl->runqueue)) {
+		tmp_obj = get_first_item(&bvt_ctl->runqueue, struct thread_object, data);
+		obj_data = (struct sched_bvt_data *)tmp_obj->data;
+		svt = obj_data->avt;
+	}
+	return svt;
 }
 
 /*
@@ -68,7 +83,6 @@ static void runqueue_add(struct thread_object *obj)
 	struct sched_bvt_data *iter_data;
 	bool insert = false;
 
-	pr_err("add");
 	/* 
 	 * According to EDF,
 	 * the earliest evt has highest priority,
@@ -100,14 +114,12 @@ void runqueue_remove(struct thread_object *obj)
 {
 	struct sched_bvt_data *data = (struct sched_bvt_data *)obj->data;
 
-	pr_err("remove");
 	list_del_init(&data->list);
 }
 
 static void sched_tick_handler(void *param)
 {
 
-	pr_err("tick");
 	struct sched_control  *ctl = (struct sched_control *)param;
 	struct sched_bvt_control *bvt_ctl = (struct sched_bvt_control *)ctl->priv;
 	struct sched_bvt_data *data;
@@ -128,6 +140,8 @@ static void sched_tick_handler(void *param)
 			/* idle ???? */
 			if (is_idle_thread(current) || data->count_down <= 0U) {
 				make_reschedule_request(pcpu_id, DEL_MODE_IPI);
+
+				//pr_err("count_down=%d",data->count_down);
 			}
 		}
 	}
@@ -180,7 +194,8 @@ void sched_bvt_init_data(struct thread_object *obj)
 	} else {
 		data->mcu_inc = 1;
 	}
-	data->cs_allow = data->mcu * CONFIG_MCU_NUM;
+	data->cs_allow = CONFIG_MCU_NUM;
+	data->count_down = data->cs_allow;
 	data->warp = false;
 }
 
@@ -193,7 +208,6 @@ static struct thread_object *sched_bvt_pick_next(struct sched_control *ctl)
 	struct thread_object *next = NULL;
 	uint64_t now = rdtsc();
 
-	pr_err("pick");
 	/*
 	 * Pick the next runnable sched object
 	 * 1) get the first item in runqueue firstly
@@ -217,11 +231,12 @@ static struct thread_object *sched_bvt_pick_next(struct sched_control *ctl)
 			/* in unit of mcu */
 			first_data->count_down = second_data->evt - first_data->evt;
 		}
-		if (first_data->count_down > first_data->cs_allow) {
+		if (first_data->count_down > (int64_t)first_data->cs_allow || first_data->count_down <= 0) {
 			first_data->count_down = first_data->cs_allow;
 		}
 		first_data->start = now;
 		next = first_obj;
+		pr_err("count=%d",first_data->count_down);
 	} else {
 		next = &get_cpu_var(idle);
 	}
@@ -246,40 +261,39 @@ static void sched_bvt_wake(struct thread_object *obj)
 	/*prevents a thread from claiming an excessive share
 	 * of the CPU after sleeping for a long time as might happen
 	 * if there was no adjustment */
+	data->svt = get_svt(obj);
 	data->avt = (data->avt > data->svt) ? data->avt : data->svt;
 	data->evt = data->avt - (data->warp ? data->warpback : 0U);
 	/* add to runqueue in order */
 	runqueue_add(obj);
+	pr_err("wake svt %d", data->svt);
 }
 
 static void sched_bvt_do_schedule(struct sched_control *ctl)
 {
-	struct sched_bvt_data *data, *obj_data;
+	struct sched_bvt_data *data;
 	struct thread_object *current = NULL;
-	struct sched_bvt_control *bvt_ctl = (struct sched_bvt_control *)ctl->priv;
-	struct thread_object *obj = NULL;
 	uint64_t now = rdtsc();
 
-	pr_err("schedule");
 	current = ctl->curr_obj;
 	data = (struct sched_bvt_data *)current->data;
 
 	/* update current thread's avt and evt */
-	data->avt = (now - data->start) / data->mcu * data->mcu_inc;
+	data->avt += (now - data->start) / data->mcu * data->mcu_inc;
 	data->evt = data->avt - (data->warp ? data->warpback : 0U);
+	pr_err("evt=%d",  data->evt);
 
 	/* Ignore the idle object, inactive objects */
 	if (!is_idle_thread(current) && is_inqueue(current)) {
 		runqueue_remove(current);
 		runqueue_add(current);
+
+		/* ??? update svt for runable obj?  update svt for the runqueue*/
+		data->svt = get_svt(current);
 	}
 
-	/* ??? update svt for runable obj?  update svt for the runqueue*/
-	obj = get_first_item(&bvt_ctl->runqueue, struct thread_object, data);
-	obj_data = (struct sched_bvt_data *)obj->data;
-	data->svt = obj_data->avt;
 }
-struct acrn_scheduler sched_iorr = {
+struct acrn_scheduler sched_bvt = {
 	.name		= "sched_bvt",
 	.init		= sched_bvt_init,
 	.init_data	= sched_bvt_init_data,

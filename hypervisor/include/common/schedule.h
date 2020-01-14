@@ -77,6 +77,7 @@ struct acrn_scheduler {
 	void	(*init_data)(struct thread_object *obj);
 	/* pick the next thread object */
 	struct thread_object* (*pick_next)(struct sched_control *ctl);
+	void	(*schedule)(struct sched_control *ctl);
 	/* put thread object into sleep */
 	void	(*sleep)(struct thread_object *obj);
 	/* wake up thread object from sleep status */

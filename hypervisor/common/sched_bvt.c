@@ -236,7 +236,6 @@ static struct thread_object *sched_bvt_pick_next(struct sched_control *ctl)
 		}
 		first_data->start = now;
 		next = first_obj;
-		pr_err("count=%d",first_data->count_down);
 	} else {
 		next = &get_cpu_var(idle);
 	}
@@ -246,8 +245,6 @@ static struct thread_object *sched_bvt_pick_next(struct sched_control *ctl)
 
 static void sched_bvt_sleep(struct thread_object *obj)
 {
-
-	pr_err("sleep");
 	runqueue_remove(obj);
 }
 
@@ -255,7 +252,6 @@ static void sched_bvt_wake(struct thread_object *obj)
 {
 	struct sched_bvt_data *data;
 
-	pr_err("wake");
 	/* update target not current thread's avt and evt */
 	data = (struct sched_bvt_data *)obj->data;
 	/*prevents a thread from claiming an excessive share
@@ -266,7 +262,6 @@ static void sched_bvt_wake(struct thread_object *obj)
 	data->evt = data->avt - (data->warp ? data->warpback : 0U);
 	/* add to runqueue in order */
 	runqueue_add(obj);
-	pr_err("wake svt %d", data->svt);
 }
 
 static void sched_bvt_do_schedule(struct sched_control *ctl)
@@ -281,7 +276,6 @@ static void sched_bvt_do_schedule(struct sched_control *ctl)
 	/* update current thread's avt and evt */
 	data->avt += (now - data->start) / data->mcu * data->mcu_inc;
 	data->evt = data->avt - (data->warp ? data->warpback : 0U);
-	pr_err("evt=%d",  data->evt);
 
 	/* Ignore the idle object, inactive objects */
 	if (!is_idle_thread(current) && is_inqueue(current)) {

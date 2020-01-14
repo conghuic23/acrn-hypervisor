@@ -93,6 +93,7 @@ struct acrn_scheduler {
 };
 extern struct acrn_scheduler sched_noop;
 extern struct acrn_scheduler sched_iorr;
+extern struct acrn_scheduler sched_bvt;
 
 struct sched_noop_control {
 	struct thread_object *noop_thread_obj;

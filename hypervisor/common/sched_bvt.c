@@ -229,11 +229,13 @@ static struct thread_object *sched_bvt_pick_next(struct sched_control *ctl)
 		}
 		if (second_data != NULL) {
 			/* in unit of mcu */
-			first_data->count_down = second_data->evt - first_data->evt;
+			first_data->count_down = (second_data->evt - first_data->evt) / first_data->mcu_inc + first_data->cs_allow;
 		}
+		/*
 		if (first_data->count_down > (int64_t)first_data->cs_allow || first_data->count_down <= 0) {
 			first_data->count_down = first_data->cs_allow;
 		}
+		*/
 		first_data->start = now;
 		next = first_obj;
 	} else {

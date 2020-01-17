@@ -145,8 +145,10 @@ bool sanitize_vm_config(void)
 			/* Deduct pcpus of PRE_LAUNCHED_VMs */
 			sos_pcpu_bitmap ^= pre_launch_pcpu_bitmap;
 			if ((sos_pcpu_bitmap == 0U) || ((vm_config->guest_flags & GUEST_FLAG_LAPIC_PASSTHROUGH) != 0U)) {
+				pr_err("1");
 				ret = false;
 			} else if (vm_config->severity != (uint8_t)SEVERITY_SOS) {
+				pr_err("2");
 				ret = false;
 			} else {
 				vm_config->vcpu_num = bitmap_weight(sos_pcpu_bitmap);
@@ -165,16 +167,20 @@ bool sanitize_vm_config(void)
 
 			if ((vm_config->severity == (uint8_t)SEVERITY_SAFETY_VM) ||
 					(vm_config->severity == (uint8_t)SEVERITY_SOS)) {
+
+				pr_err("3");
 				ret = false;
 			}
 
 			/* VM with RTVM uuid must have RTVM severity */
 			if (is_rtvm_uuid(vm_config->uuid) && (vm_config->severity != (uint8_t)SEVERITY_RTVM)) {
+				pr_err("4");
 				ret = false;
 			}
 
 			/* VM WITHOUT RTVM uuid must NOT have RTVM severity */
 			if (!is_rtvm_uuid(vm_config->uuid) && (vm_config->severity == (uint8_t)SEVERITY_RTVM)) {
+				pr_err("5");
 				ret = false;
 			}
 
@@ -194,6 +200,7 @@ bool sanitize_vm_config(void)
 		}
 
 		if (((vm_config->epc.size | vm_config->epc.base) & ~PAGE_MASK) != 0UL) {
+			pr_err("6");
 			ret = false;
 		}
 

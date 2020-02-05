@@ -84,7 +84,6 @@ static void runqueue_add(struct thread_object *obj)
 	bool insert = false;
 
 	/* 
-	 * According to EDF,
 	 * the earliest evt has highest priority,
 	 * the runqueue is ordered by priority.
 	 */
@@ -174,7 +173,7 @@ int sched_bvt_init(struct sched_control *ctl)
 	return ret;
 }
 
-void sched_iorr_deinit(struct sched_control *ctl)
+void sched_bvt_deinit(struct sched_control *ctl)
 {
 	struct sched_bvt_control *bvt_ctl = (struct sched_bvt_control *)ctl->priv;
 	del_timer(&bvt_ctl->tick_timer);
@@ -297,5 +296,5 @@ struct acrn_scheduler sched_bvt = {
 	.schedule	= sched_bvt_do_schedule,
 	.sleep		= sched_bvt_sleep,
 	.wake		= sched_bvt_wake,
-	.deinit		= sched_iorr_deinit,
+	.deinit		= sched_bvt_deinit,
 };

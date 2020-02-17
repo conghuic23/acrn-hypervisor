@@ -27,6 +27,7 @@ struct sched_bvt_data {
 	int64_t avt;
 	/* effective virtual time in units of mcu */
 	int64_t evt;
+	uint64_t residual;
 
 	uint64_t start_tsc;
 };
@@ -155,13 +156,88 @@ void sched_bvt_init_data(struct thread_object *obj)
 	data->mcu = CONFIG_MCU_MS * CYCLES_PER_MS;
 	/* TODO: mcu advance value should be proportional to weight. */
 	data->vt_ratio = 1;
+	data->residual = 0U;
 	data->cs_allow = CONFIG_CSA_MCU_NUM;
 	data->run_countdown = data->cs_allow;
 }
 
-static struct thread_object *sched_bvt_pick_next(__unused struct sched_control *ctl)
+static uint64_t v2p(uint64_t virt_time, uint64_t ratio)
 {
-	return NULL;
+	return (uint64_t)(virt_time / ratio);
+}
+
+static uint64_t p2v(uint64_t phy_time, uint64_t ratio)
+{
+	return (uint64_t)(phy_time * ratio);
+}
+
+static void update_vt(struct thread_object *obj)
+{
+	struct sched_bvt_data *data;
+	uint64_t now_tsc = rdtsc();
+	uint64_t v_delta, delta_mcu = 0U;
+
+	data = (struct sched_bvt_data *)obj->data;
+
+	/* update current thread's avt and evt */
+	if (now_tsc > data->start_tsc) {
+		v_delta = p2v(now_tsc - data->start_tsc, data->vt_ratio) + data->residual;
+		delta_mcu = (uint64_t)(v_delta / data->mcu);
+		data->residual = v_delta % data->mcu;
+	}
+	data->avt += delta_mcu;
+	/* TODO: evt = avt - (warp ? warpback : 0U) */
+	data->evt = data->avt;
+
+	/* Ignore the idle object, inactive objects */
+	if (is_inqueue(obj)) {
+		runqueue_remove(obj);
+		runqueue_add(obj);
+	}
+}
+
+static struct thread_object *sched_bvt_pick_next(struct sched_control *ctl)
+{
+	struct sched_bvt_control *bvt_ctl = (struct sched_bvt_control *)ctl->priv;
+	struct thread_object *first_obj = NULL, *second_obj = NULL;
+	struct sched_bvt_data *first_data = NULL, *second_data = NULL;
+	struct list_head *first, *sec;
+	struct thread_object *next = NULL;
+	struct thread_object *current = ctl->curr_obj;
+	uint64_t now_tsc = rdtsc();
+	uint64_t delta_mcu = 0U;
+
+	if (!is_idle_thread(current)) {
+		update_vt(current);
+	}
+
+	if (!list_empty(&bvt_ctl->runqueue)) {
+		first = bvt_ctl->runqueue.next;
+		sec = (first->next == &bvt_ctl->runqueue) ? NULL : first->next;
+
+		first_obj = list_entry(first, struct thread_object, data);
+		first_data = (struct sched_bvt_data *)first_obj->data;
+
+		if (sec != NULL) {
+			second_obj = list_entry(sec, struct thread_object, data);
+			second_data = (struct sched_bvt_data *)second_obj->data;
+			delta_mcu = second_data->evt - first_data->evt;
+			/* run_countdown is the real time the thread can run */
+			first_data->run_countdown = v2p(delta_mcu, first_data->vt_ratio)
+				+ first_data->cs_allow;
+		} else {
+			/* there is only one object in runqueue, it can run for a long
+			 * time before reschedule */
+			first_data->run_countdown = UINT64_MAX;
+		}
+		first_data->start_tsc = now_tsc;
+		next = first_obj;
+	} else {
+		next = &get_cpu_var(idle);
+	}
+
+	return next;
+
 }
 
 static void sched_bvt_sleep(struct thread_object *obj)

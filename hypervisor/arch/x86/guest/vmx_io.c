@@ -28,7 +28,7 @@ void arch_fire_vhm_interrupt(void)
 	struct acrn_vcpu *vcpu;
 
 	sos_vm = get_sos_vm();
-	vcpu = vcpu_from_vid(sos_vm, BSP_CPU_ID);
+	vcpu = vcpu_from_vid(sos_vm, get_pcpu_id());
 
 	vlapic_set_intr(vcpu, get_vhm_notification_vector(), LAPIC_TRIG_EDGE);
 }

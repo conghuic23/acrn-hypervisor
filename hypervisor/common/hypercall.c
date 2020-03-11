@@ -150,6 +150,7 @@ int32_t hcall_create_vm(struct acrn_vm *vm, uint64_t param)
 	struct acrn_vm *target_vm = NULL;
 	struct acrn_create_vm cv;
 	struct acrn_vm_config* vm_config = NULL;
+	int i, pcpu;
 
 	if (copy_from_gpa(vm, &cv, param, sizeof(cv)) == 0) {
 		vm_id = get_vmid_by_uuid(&cv.uuid[0]);
@@ -175,6 +176,13 @@ int32_t hcall_create_vm(struct acrn_vm *vm, uint64_t param)
 					/* return a relative vm_id from SOS view */
 					cv.vmid = vmid_2_rel_vmid(vm->vm_id, vm_id);
 					cv.vcpu_num = vm_config->vcpu_num;
+					/* update the pcpu to vcpu map for the vm */
+					memset(cv.pcpu_vcpu_map, -1, 16);
+					for (i = 0; i < vm_config->vcpu_num; i++) {
+						pcpu = ffs64(vm_config->vcpu_affinity[i]);
+						cv.pcpu_vcpu_map[pcpu] = i;
+						pr_err(" map pcpu %d -> vcpu %d", pcpu, i);
+					}
 					ret = 0;
 				}
 

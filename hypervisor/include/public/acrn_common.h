@@ -361,7 +361,7 @@ struct acrn_create_vm {
 	uint64_t req_buf;
 
 	/** Reserved for future use*/
-	uint8_t  reserved2[16];
+	uint8_t  pcpu_vcpu_map[16];
 } __aligned(8);
 
 /**

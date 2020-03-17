@@ -238,9 +238,11 @@ int32_t hcall_start_vm(uint16_t vmid)
 {
 	int32_t ret = -1;
 	struct acrn_vm *target_vm = get_vm_from_vmid(vmid);
-
+	pr_err("hcall_start_vm enter\n");
 	if ((is_created_vm(target_vm)) && (is_postlaunched_vm(target_vm)) && (target_vm->sw.io_shared_page != NULL)) {
 		/* TODO: check target_vm guest_flags */
+
+		pr_err("hcall_start_vm enter 2\n");
 		start_vm(target_vm);
 		ret = 0;
 	}

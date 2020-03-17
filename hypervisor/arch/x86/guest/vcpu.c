@@ -783,6 +783,7 @@ void launch_vcpu(struct acrn_vcpu *vcpu)
 
 	pr_dbg("vcpu%hu scheduled on pcpu%hu", vcpu->vcpu_id, pcpu_id);
 
+	pr_err("launch_vcpu !!!!! \n");
 	if (vcpu->state == VCPU_INIT) {
 		vcpu->state = VCPU_RUNNING;
 		wake_thread(&vcpu->thread_obj);

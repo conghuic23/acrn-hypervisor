@@ -37,6 +37,7 @@
 #include <sysexits.h>
 #include <stdbool.h>
 #include <getopt.h>
+#include <sys/sysinfo.h>
 
 #include "vmmapi.h"
 #include "sw_load.h"
@@ -99,11 +100,10 @@ static int pm_notify_channel;
 static int acpi;
 
 static char *progname;
-static const int BSP;
 
 static cpuset_t cpumask;
 
-static void vm_loop(struct vmctx *ctx);
+static void vm_loop(struct vmctx *ctx, int vcpu);
 
 static char vhm_request_page[4096] __aligned(4096);
 
@@ -231,17 +231,15 @@ high_bios_size(void)
 static void *
 start_thread(void *param)
 {
-	char tname[MAXCOMLEN + 1];
 	struct mt_vmm_info *mtp;
 	int vcpu;
+	struct vmctx *ctx;
 
 	mtp = param;
+	ctx = mtp->mt_ctx;
 	vcpu = mtp->mt_vcpu;
 
-	snprintf(tname, sizeof(tname), "vcpu %d", vcpu);
-	pthread_setname_np(mtp->mt_thr, tname);
-
-	vm_loop(mtp->mt_ctx);
+	vm_loop(ctx, vcpu);
 
 	/* reset or halt */
 	return NULL;
@@ -251,40 +249,58 @@ static int
 add_cpu(struct vmctx *ctx, int vcpu_num)
 {
 	int i;
-	int error;
+	int error = 0;
+	cpu_set_t cpuset;
+	char tname[MAXCOMLEN + 1];
+	int pcpu;
+
+	ctx->ioreq_client = vm_create_ioreq_client(ctx);
+	if (ctx->ioreq_client <= 0) {
+		pr_err("%s, failed to create IOREQ.\n", __func__);
+		return -1;
+	}
 
 	for (i = 0; i < vcpu_num; i++) {
-		error = vm_create_vcpu(ctx, (uint16_t)i);
-		if (error != 0) {
-			pr_err("ERROR: could not create VCPU %d\n", i);
-			return error;
-		}
 		CPU_SET_ATOMIC(i, &cpumask);
 
 		mt_vmm_info[i].mt_ctx = ctx;
 		mt_vmm_info[i].mt_vcpu = i;
+		error = pthread_create(&mt_vmm_info[i].mt_thr, NULL,
+				start_thread, &mt_vmm_info[i]);
+
+		pcpu = ctx->vcpu_pcpu_map[i];
+		CPU_ZERO(&cpuset);
+		CPU_SET(pcpu, &cpuset);
+		printf("affinity vcpu=%d pcpu = %d", i, pcpu);
+		snprintf(tname, sizeof(tname), "vcpu %d", i);
+		pthread_setname_np(mt_vmm_info[i].mt_thr, tname);
+		pthread_setaffinity_np(mt_vmm_info[i].mt_thr, sizeof(cpu_set_t), &cpuset);
 	}
 
 	vm_set_vcpu_regs(ctx, &ctx->bsp_regs);
-
-	error = pthread_create(&mt_vmm_info[0].mt_thr, NULL,
-	    start_thread, &mt_vmm_info[0]);
+	if (vm_run(ctx) != 0) {
+		pr_err("%s, failed to run VM.\n", __func__);
+		return -1;
+	}
 
 	return error;
 }
 
 static int
-delete_cpu(struct vmctx *ctx, int vcpu)
+delete_cpu(struct vmctx *ctx, int vcpu_num)
 {
-	if (!CPU_ISSET(vcpu, &cpumask)) {
-		pr_err("Attempting to delete unknown cpu %d\n", vcpu);
-		exit(1);
-	}
+	int i;
 
 	vm_destroy_ioreq_client(ctx);
-	pthread_join(mt_vmm_info[0].mt_thr, NULL);
+	for (i = 0; i < vcpu_num; i++) {
+		if (!CPU_ISSET(i, &cpumask)) {
+			pr_err("Attempting to delete unknown cpu %d\n", i);
+			exit(1);
+		}
+		pthread_join(mt_vmm_info[i].mt_thr, NULL);
+		CPU_CLR_ATOMIC(i, &cpumask);
+	}
 
-	CPU_CLR_ATOMIC(vcpu, &cpumask);
 	return CPU_EMPTY(&cpumask);
 }
 
@@ -651,48 +667,33 @@ vm_suspend_resume(struct vmctx *ctx)
 }
 
 static void
-vm_loop(struct vmctx *ctx)
+vm_loop(struct vmctx *ctx, int vcpu)
 {
-	int error;
-
-	ctx->ioreq_client = vm_create_ioreq_client(ctx);
-	if (ctx->ioreq_client <= 0) {
-		pr_err("%s, failed to create IOREQ.\n", __func__);
-		return;
-	}
-
-	if (vm_run(ctx) != 0) {
-		pr_err("%s, failed to run VM.\n", __func__);
-		return;
-	}
-
 	while (1) {
-		int vcpu_id;
 		struct vhm_request *vhm_req;
 
-		error = vm_attach_ioreq_client(ctx);
-		if (error)
+		if (vm_attach_ioreq_client(ctx))
 			break;
 
-		for (vcpu_id = 0; vcpu_id < guest_ncpus; vcpu_id++) {
-			vhm_req = &vhm_req_buf[vcpu_id];
-			if ((atomic_load(&vhm_req->processed) == REQ_STATE_PROCESSING)
-				&& (vhm_req->client == ctx->ioreq_client))
-				handle_vmexit(ctx, vhm_req, vcpu_id);
-		}
+		vhm_req = &vhm_req_buf[vcpu];
+		if ((atomic_load(&vhm_req->processed) == REQ_STATE_PROCESSING)
+			&& (vhm_req->client == ctx->ioreq_client))
+			handle_vmexit(ctx, vhm_req, vcpu);
 
-		if (VM_SUSPEND_FULL_RESET == vm_get_suspend_mode() ||
-		    VM_SUSPEND_POWEROFF == vm_get_suspend_mode()) {
-			break;
-		}
+		if (vcpu == 0) {
+			if (VM_SUSPEND_FULL_RESET == vm_get_suspend_mode() ||
+			    VM_SUSPEND_POWEROFF == vm_get_suspend_mode()) {
+				break;
+			}
 
-		/* RTVM can't be reset */
-		if ((VM_SUSPEND_SYSTEM_RESET == vm_get_suspend_mode()) && (!is_rtvm)) {
-			vm_system_reset(ctx);
-		}
+			/* RTVM can't be reset */
+			if ((VM_SUSPEND_SYSTEM_RESET == vm_get_suspend_mode()) && (!is_rtvm)) {
+				vm_system_reset(ctx);
+			}
 
-		if (VM_SUSPEND_SUSPEND == vm_get_suspend_mode()) {
-			vm_suspend_resume(ctx);
+			if (VM_SUSPEND_SUSPEND == vm_get_suspend_mode()) {
+				vm_suspend_resume(ctx);
+			}
 		}
 	}
 	pr_err("VM loop exit\n");
@@ -1045,7 +1046,7 @@ main(int argc, char *argv[])
 		mevent_dispatch();
 
 		vm_pause(ctx);
-		delete_cpu(ctx, BSP);
+		delete_cpu(ctx, guest_ncpus);
 
 		if (vm_get_suspend_mode() != VM_SUSPEND_FULL_RESET){
 			ret = 0;

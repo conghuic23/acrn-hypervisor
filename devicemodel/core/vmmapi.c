@@ -94,6 +94,7 @@ vm_create(const char *name, uint64_t req_buf, int *vcpu_num)
 	int error, retry = 10;
 	uuid_t vm_uuid;
 	struct stat tmp_st;
+	int i, vcpu;
 
 	memset(&create_vm, 0, sizeof(struct acrn_create_vm));
 	ctx = calloc(1, sizeof(struct vmctx) + strnlen(name, PATH_MAX) + 1);
@@ -171,6 +172,11 @@ vm_create(const char *name, uint64_t req_buf, int *vcpu_num)
 
 	*vcpu_num = create_vm.vcpu_num;
 	ctx->vmid = create_vm.vmid;
+	for (i = 0; i < 16; i++) {
+		vcpu = create_vm.pcpu_vcpu_map[i];
+		if (vcpu >= 0 && vcpu < create_vm.vcpu_num)
+			ctx->vcpu_pcpu_map[vcpu] = i;
+	}
 
 	return ctx;
 

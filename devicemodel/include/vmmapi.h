@@ -49,6 +49,7 @@ struct vmctx {
 	int     fd;
 	int     vmid;
 	int     ioreq_client;
+	uint8_t vcpu_pcpu_map[16];
 	uint32_t lowmem_limit;
 	uint64_t highmem_gpa_base;
 	size_t  lowmem;

@@ -576,6 +576,11 @@ int32_t shutdown_vm(struct acrn_vm *vm)
 	if (vm->state == VM_PAUSED) {
 		vm->state = VM_POWERED_OFF;
 
+		foreach_vcpu(i, vm, vcpu) {
+			/* tell guest to release destory client */
+			vlapic_set_intr(vcpu, get_vhm_notification_vector(), LAPIC_TRIG_EDGE); 
+		}
+
 		mask = lapic_pt_enabled_pcpu_bitmap(vm);
 		if (mask != 0UL) {
 			ret = offline_lapic_pt_enabled_pcpus(vm, mask);
@@ -625,6 +630,7 @@ void start_vm(struct acrn_vm *vm)
 
 	vm->state = VM_RUNNING;
 
+	pr_err("start_vm !!!!\n");
 	/* Only start BSP (vid = 0) and let BSP start other APs */
 	bsp = vcpu_from_vid(vm, BSP_CPU_ID);
 	vcpu_make_request(bsp, ACRN_REQUEST_INIT_VMCS);

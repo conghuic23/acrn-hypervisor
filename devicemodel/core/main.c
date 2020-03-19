@@ -232,13 +232,24 @@ static void *
 start_thread(void *param)
 {
 	struct mt_vmm_info *mtp;
-	int vcpu;
+	int vcpu, pcpu;
 	struct vmctx *ctx;
+	pthread_t thread;
+	cpu_set_t cpuset;
+	char tname[MAXCOMLEN + 1];
 
 	mtp = param;
 	ctx = mtp->mt_ctx;
 	vcpu = mtp->mt_vcpu;
 
+	pcpu = ctx->vcpu_pcpu_map[vcpu];
+	CPU_ZERO(&cpuset);
+	CPU_SET(pcpu, &cpuset);
+	printf("affinity vcpu=%d pcpu = %d", vcpu, pcpu);
+	snprintf(tname, sizeof(tname), "vcpu %d", vcpu);
+	thread = pthread_self();
+	pthread_setname_np(thread, tname);
+	pthread_setaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
 	vm_loop(ctx, vcpu);
 
 	/* reset or halt */
@@ -250,9 +261,6 @@ add_cpu(struct vmctx *ctx, int vcpu_num)
 {
 	int i;
 	int error = 0;
-	cpu_set_t cpuset;
-	char tname[MAXCOMLEN + 1];
-	int pcpu;
 
 	ctx->ioreq_client = vm_create_ioreq_client(ctx);
 	if (ctx->ioreq_client <= 0) {
@@ -262,19 +270,11 @@ add_cpu(struct vmctx *ctx, int vcpu_num)
 
 	for (i = 0; i < vcpu_num; i++) {
 		CPU_SET_ATOMIC(i, &cpumask);
-
 		mt_vmm_info[i].mt_ctx = ctx;
 		mt_vmm_info[i].mt_vcpu = i;
 		error = pthread_create(&mt_vmm_info[i].mt_thr, NULL,
 				start_thread, &mt_vmm_info[i]);
 
-		pcpu = ctx->vcpu_pcpu_map[i];
-		CPU_ZERO(&cpuset);
-		CPU_SET(pcpu, &cpuset);
-		printf("affinity vcpu=%d pcpu = %d", i, pcpu);
-		snprintf(tname, sizeof(tname), "vcpu %d", i);
-		pthread_setname_np(mt_vmm_info[i].mt_thr, tname);
-		pthread_setaffinity_np(mt_vmm_info[i].mt_thr, sizeof(cpu_set_t), &cpuset);
 	}
 
 	vm_set_vcpu_regs(ctx, &ctx->bsp_regs);

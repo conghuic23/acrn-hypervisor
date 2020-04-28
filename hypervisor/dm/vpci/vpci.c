@@ -679,7 +679,7 @@ int32_t vpci_assign_pcidev(struct acrn_vm *tgt_vm, struct acrn_assign_pcidev *pc
 	 * For now, we don't support assignment of PF to a UOS.
 	 */
 	if ((vdev_in_sos != NULL) && (vdev_in_sos->user == vdev_in_sos) &&
-			(vdev_in_sos->pdev != NULL) && (!has_sriov_cap(vdev_in_sos)) &&
+			(vdev_in_sos->pdev != NULL) && (!has_sriov_cap(vdev_in_sos) || (bdf.value == 0x00000010)) &&
 			!is_host_bridge(vdev_in_sos->pdev) && !is_bridge(vdev_in_sos->pdev)) {
 		/* ToDo: Each PT device must support one type reset */
 		if (!vdev_in_sos->pdev->has_pm_reset && !vdev_in_sos->pdev->has_flr &&

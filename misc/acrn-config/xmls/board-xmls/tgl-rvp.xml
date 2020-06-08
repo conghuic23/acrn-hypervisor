@@ -431,7 +431,7 @@
 	</IOMEM_INFO>
 
 	<BLOCK_DEVICE_INFO>
-	/dev/nvme0n1p3: TYPE="ext4"
+	/dev/sda2: TYPE="ext4"
 	</BLOCK_DEVICE_INFO>
 
 	<TTYS_INFO>

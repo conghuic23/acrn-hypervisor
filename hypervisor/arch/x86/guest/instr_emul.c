@@ -1761,12 +1761,13 @@ static void decode_op_and_addr_size(struct instr_emul_vie *vie, enum vm_cpu_mode
 }
 static int32_t decode_prefixes(struct instr_emul_vie *vie, enum vm_cpu_mode cpu_mode, bool cs_d)
 {
-	uint8_t x, i;
+	uint8_t x=0, i;
 	int32_t ret  = 0;
 
 	for (i = 0U; i < VIE_PREFIX_SIZE; i++) {
 		if (vie_peek(vie, &x) != 0) {
 			ret = -1;
+			pr_err("prefix %x is not support!",x);
 			break;
 		} else {
 			if (x == 0x66U) {
@@ -1837,12 +1838,14 @@ static int32_t decode_opcode(struct instr_emul_vie *vie)
 	uint8_t x;
 
 	if (vie_peek(vie, &x) != 0) {
+		pr_err("vie->num_valid = %d, vie->num_processed=%d", vie->num_valid, vie->num_processed);
 		ret = -1;
 	} else {
 		vie->opcode = x;
 		vie->op = one_byte_opcodes[x];
 
 		if (vie->op.op_type == VIE_OP_TYPE_NONE) {
+			pr_err("vie->opcode = %x", x);
 			ret = -1;
 		} else {
 			vie_advance(vie);
@@ -2177,18 +2180,25 @@ static int32_t local_decode_instruction(enum vm_cpu_mode cpu_mode,
 	int32_t ret;
 
 	if (decode_prefixes(vie, cpu_mode, cs_d) != 0) {
+		pr_err("decode_prefixes !");
 		ret = -1;
 	} else if (decode_opcode(vie) != 0) {
+		pr_err("decode_opcode !");
 		ret = -1;
 	} else if (decode_modrm(vie, cpu_mode) != 0) {
+		pr_err("decode_modrm !");
 		ret = -1;
 	} else if (decode_sib(vie) != 0) {
+		pr_err("decode_sib !");
 		ret = -1;
 	} else if (decode_displacement(vie) != 0) {
+		pr_err("decode_displacement !");
 		ret = -1;
 	} else if (decode_immediate(vie) != 0) {
+		pr_err("decode_immediate !");
 		ret = -1;
 	} else if (decode_moffset(vie) != 0) {
+		pr_err("decode_moffset !");
 		ret = -1;
 	} else {
 		vie->decoded = 1U;	/* success */

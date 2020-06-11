@@ -141,6 +141,7 @@ enum vcpu_state {
 	VCPU_OFFLINE = 0U,
 	VCPU_INIT,
 	VCPU_RUNNING,
+	VCPU_PAUSED,
 	VCPU_ZOMBIE,
 };
 

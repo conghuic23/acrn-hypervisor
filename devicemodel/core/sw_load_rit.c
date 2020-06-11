@@ -9,6 +9,7 @@
 #include "vmmapi.h"
 #include "sw_load.h"
 #include "acpi.h"
+#include "dm_string.h"
 
 static char rit_path[STR_LEN];
 
@@ -229,7 +230,7 @@ size_t rit_bios_size()
 
 int acrn_parse_rit(char *arg)
 {
-	size_t len = strlen(arg);
+	size_t len = strnlen(arg,1024);
 
 	if (len < STR_LEN) {
 		strncpy(rit_path, arg, len + 1);

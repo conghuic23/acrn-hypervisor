@@ -69,7 +69,7 @@ static void init_guest_vmx(struct acrn_vcpu *vcpu, uint64_t cr0, uint64_t cr3,
 
 	/* break UOS at reset vector if debug enabled*/
 	if (!is_sos_vm(vcpu->vm) && vcpu->vm->enable_debug){
-		uint32_t ip = 0xFFFFFFF0U;
+		uint64_t ip = 0xFFFFFFF0U;
 		asm volatile("mov %0, %%dr0":
 					     :"r"(ip)
 					     :);
@@ -280,7 +280,7 @@ static void init_exec_ctrl(struct acrn_vcpu *vcpu)
 	value32 = check_vmx_ctrl(MSR_IA32_VMX_PROCBASED_CTLS,
 			 VMX_PROCBASED_CTLS_TSC_OFF | VMX_PROCBASED_CTLS_TPR_SHADOW |
 			 VMX_PROCBASED_CTLS_IO_BITMAP | VMX_PROCBASED_CTLS_MSR_BITMAP |
-			 VMX_PROCBASED_CTLS_HLT | VMX_PROCBASED_CTLS_SECONDARY);
+			 VMX_PROCBASED_CTLS_SECONDARY);
 
 	/* trap MOV to/from DR if debug enabled for UOS */
 	if (!is_sos_vm(vcpu->vm) && vcpu->vm->enable_debug)
@@ -310,8 +310,7 @@ static void init_exec_ctrl(struct acrn_vcpu *vcpu)
 	 */
 	value32 = check_vmx_ctrl(MSR_IA32_VMX_PROCBASED_CTLS2,
 			VMX_PROCBASED_CTLS2_VAPIC | VMX_PROCBASED_CTLS2_EPT |VMX_PROCBASED_CTLS2_VPID |
-			VMX_PROCBASED_CTLS2_RDTSCP | VMX_PROCBASED_CTLS2_UNRESTRICT |
-			VMX_PROCBASED_CTLS2_PAUSE_LOOP);
+			VMX_PROCBASED_CTLS2_RDTSCP | VMX_PROCBASED_CTLS2_UNRESTRICT);
 
 	/* SDM Vol3, 25.3,  setting "enable INVPCID" VM-execution to 1 with "INVLPG exiting" disabled,
 	 * passes-through INVPCID instruction to guest if the instruction is supported.

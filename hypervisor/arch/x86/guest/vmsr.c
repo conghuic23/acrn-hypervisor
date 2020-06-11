@@ -780,6 +780,7 @@ int32_t wrmsr_vmexit_handler(struct acrn_vcpu *vcpu)
 		if (validate_pstate(vcpu->vm, v) != 0) {
 			break;
 		}
+		pr_err("msr_write %x %lx ", msr, v);
 		msr_write(msr, v);
 		break;
 	}

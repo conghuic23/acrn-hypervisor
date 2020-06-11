@@ -223,7 +223,7 @@ int32_t vmexit_handler(struct acrn_vcpu *vcpu)
 		/* Log details for exit */
 		pr_dbg("Exit Reason: 0x%016lx ", vcpu->arch.exit_reason);
 
-		if (!is_sos_vm(vcpu->vm)) {
+		if (!is_sos_vm(vcpu->vm) && vcpu->arch.exit_reason != 0x1) {
 			/* Log details for exit */
 			pr_err("\n");
 			pr_err("Exit Reason: 0x%016llx ", vcpu->arch.exit_reason);

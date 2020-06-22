@@ -8,7 +8,7 @@
 #include <errno.h>
 #include <logmsg.h>
 
-#define DBG_LEVEL_IOREQ	6U
+#define DBG_LEVEL_IOREQ	3U
 
 static uint32_t acrn_vhm_notification_vector = HYPERVISOR_CALLBACK_VHM_VECTOR;
 #define MMIO_DEFAULT_VALUE_SIZE_1	(0xFFUL)
@@ -16,9 +16,16 @@ static uint32_t acrn_vhm_notification_vector = HYPERVISOR_CALLBACK_VHM_VECTOR;
 #define MMIO_DEFAULT_VALUE_SIZE_4	(0xFFFFFFFFUL)
 #define MMIO_DEFAULT_VALUE_SIZE_8	(0xFFFFFFFFFFFFFFFFUL)
 
-#if defined(HV_DEBUG)
-__unused static void acrn_print_request(uint16_t vcpu_id, const struct vhm_request *req)
+void acrn_print_request(struct acrn_vcpu *vcpu)
 {
+	union vhm_request_buffer *req_buf = NULL;
+	uint16_t vcpu_id = vcpu->vcpu_id;
+	struct vhm_request *req;
+
+	req_buf = (union vhm_request_buffer *)(vcpu->vm->sw.io_shared_page);
+
+	req = &req_buf->req_queue[vcpu_id];
+	
 	switch (req->type) {
 	case REQ_MMIO:
 		dev_dbg(DBG_LEVEL_IOREQ, "[vcpu_id=%hu type=MMIO]", vcpu_id);
@@ -46,7 +53,6 @@ __unused static void acrn_print_request(uint16_t vcpu_id, const struct vhm_reque
 		break;
 	}
 }
-#endif
 
 /**
  * @brief Reset all IO requests status of the VM

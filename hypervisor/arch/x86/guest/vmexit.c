@@ -287,9 +287,13 @@ static int32_t pause_vmexit_handler(__unused struct acrn_vcpu *vcpu)
 
 static int32_t hlt_vmexit_handler(struct acrn_vcpu *vcpu)
 {
+	if (vcpu->vm->vm_id == 1)
+		pr_err("HLT happend ");
 	if ((vcpu->arch.pending_req == 0UL) && (!vlapic_has_pending_intr(vcpu))) {
 		wait_event(&vcpu->events[VCPU_EVENT_VIRTUAL_INTERRUPT]);
 	}
+
+	pr_err("HLT finish ");
 	return 0;
 }
 

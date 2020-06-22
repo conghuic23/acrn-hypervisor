@@ -322,6 +322,7 @@ static inline bool is_apicv_basic_feature_supported(void)
 
 bool is_apicv_advanced_feature_supported(void)
 {
+	pr_err("!!!!!!!!!! is_apicv_advanced_feature_supported !!!!!!!!!!!!!i %x %d ", cpu_caps.apicv_features, (cpu_caps.apicv_features & APICV_ADVANCED_FEATURE) == APICV_ADVANCED_FEATURE);
 	return ((cpu_caps.apicv_features & APICV_ADVANCED_FEATURE) == APICV_ADVANCED_FEATURE);
 }
 

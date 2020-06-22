@@ -24,7 +24,7 @@
 #include <pci.h>
 #include <platform_caps.h>
 
-#define DBG_IOMMU 0
+#define DBG_IOMMU 1
 
 #if DBG_IOMMU
 #define DBG_LEVEL_IOMMU LOG_INFO
@@ -806,7 +806,7 @@ static void fault_status_analysis(uint32_t status)
 }
 #endif
 
-static void fault_record_analysis(__unused uint64_t low, uint64_t high)
+static void fault_record_analysis(__unused uint64_t low, uint64_t high, struct dmar_drhd_rt *dmar_unit)
 {
 	union pci_bdf dmar_bdf;
 
@@ -857,7 +857,7 @@ static void dmar_fault_handler(uint32_t irq, void *data)
 		dev_dbg(DBG_LEVEL_IOMMU, "%s: record[%d] @0x%x:  0x%lx, 0x%lx",
 			__func__, index, record_reg_offset, fault_record.lo_64, fault_record.hi_64);
 
-		fault_record_analysis(fault_record.lo_64, fault_record.hi_64);
+		fault_record_analysis(fault_record.lo_64, fault_record.hi_64, dmar_unit);
 
 		/* write to clear */
 		iommu_write64(dmar_unit, record_reg_offset, fault_record.lo_64);

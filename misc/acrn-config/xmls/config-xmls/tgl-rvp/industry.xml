@@ -5,7 +5,7 @@
         <SERIAL_CONSOLE desc="The serial device which is used for hypervisor debug, only valid on Debug version.">/dev/ttyS0</SERIAL_CONSOLE>
         <MEM_LOGLEVEL desc="Default loglevel in memory">5</MEM_LOGLEVEL>
         <NPK_LOGLEVEL desc="Default loglevel for the hypervisor NPK log">5</NPK_LOGLEVEL>
-        <CONSOLE_LOGLEVEL desc="Default loglevel on the serial console">3</CONSOLE_LOGLEVEL>
+        <CONSOLE_LOGLEVEL desc="Default loglevel on the serial console">5</CONSOLE_LOGLEVEL>
         <LOG_DESTINATION desc="Bitmap of consoles where logs are printed.">7</LOG_DESTINATION>
         <LOG_BUF_SIZE desc="Capacity of logbuf for each physical cpu.">0x40000</LOG_BUF_SIZE>
     </DEBUG_OPTIONS>
@@ -100,6 +100,7 @@
             <guest_flag />
         </guest_flags>
         <cpu_affinity desc="vCPU affinity map. Each vCPU will pin to the selected pCPU ID. Please make sure each vCPU pin to different pCPU.">
+            <pcpu_id>0</pcpu_id>
             <pcpu_id>1</pcpu_id>
         </cpu_affinity>
         <clos desc="Class of Service for Cache Allocation Technology. Please refer SDM 17.19.2 for details and use with caution.">

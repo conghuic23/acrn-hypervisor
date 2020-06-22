@@ -181,6 +181,8 @@ static void rw_vmsix_table(struct pci_vdev *vdev, struct mmio_request *mmio, uin
 				}
 			} else {
 				pr_err("%s, Only DWORD and QWORD are permitted", __func__);
+				pr_err("vpci bdf=%d:%d:%d value=%x size=%x",vdev->bdf.bits.b,
+						vdev->bdf.bits.d,vdev->bdf.bits.f, mmio->value, mmio->size);
 			}
 
 		}
@@ -245,6 +247,9 @@ int32_t vmsix_handle_table_mmio_access(struct io_request *io_req, void *handler_
 				}
 			} else {
 				pr_err("%s, Only DWORD and QWORD are permitted", __func__);
+
+				pr_err("vpci bdf=%d:%d:%d value=%x size=%x",vdev->bdf.bits.b,
+						vdev->bdf.bits.d,vdev->bdf.bits.f, mmio->value, mmio->size);
 				ret = -EINVAL;
 			}
 		}

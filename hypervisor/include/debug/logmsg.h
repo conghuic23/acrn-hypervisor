@@ -102,7 +102,7 @@ void vprintf(const char *fmt, va_list args);
 
 #define pr_info(...)						\
 	do {							\
-		do_logmsg(LOG_INFO, pr_prefix __VA_ARGS__);	\
+		do_logmsg(LOG_WARNING, pr_prefix __VA_ARGS__);	\
 	} while (0)
 
 #define pr_dbg(...)						\

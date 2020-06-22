@@ -287,9 +287,9 @@ void init_pcpu_post(uint16_t pcpu_id)
 	setup_clos(pcpu_id);
 #endif
 
-	enable_smep();
+//enable_smep();
 
-	enable_smap();
+//	enable_smap();
 }
 
 static uint16_t get_pcpu_id_from_lapic_id(uint32_t lapic_id)

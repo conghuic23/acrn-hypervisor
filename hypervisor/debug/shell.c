@@ -630,6 +630,7 @@ static int32_t shell_list_vm(__unused int32_t argc, __unused char **argv)
 	return 0;
 }
 
+extern void acrn_print_request(struct acrn_vcpu *vcpu);
 static int32_t shell_list_vcpu(__unused int32_t argc, __unused char **argv)
 {
 	char temp_str[MAX_STR_SIZE];
@@ -690,6 +691,7 @@ static int32_t shell_list_vcpu(__unused int32_t argc, __unused char **argv)
 					vcpu_state_str, thread_state_str);
 			/* Output information for this task */
 			shell_puts(temp_str);
+			acrn_print_request(vcpu);
 		}
 	}
 

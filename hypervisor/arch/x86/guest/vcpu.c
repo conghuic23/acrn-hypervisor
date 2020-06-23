@@ -762,14 +762,19 @@ void zombie_vcpu(struct acrn_vcpu *vcpu, enum vcpu_state new_state)
 void save_xsave_area(struct ext_context *ectx)
 {
 	ectx->xss = msr_read(MSR_IA32_XSS);
-	write_xcr(0, ectx->xcr0_used);
+
+	/* Always set SSE bit in XCR0. As when guest use FXSAVE, it would not update XCR0.
+	 * FXSAVE will save FPU and SSE region. But XSAVES with defualt XCR0 value (0x1)
+	 * would not save SSE region. This will lead to the mismatch for SSE region.*/
+	write_xcr(0, ectx->xcr0_used | XCR0_SSE);
+
 	xsaves(&ectx->xs_area, UINT64_MAX);
 	write_xcr(0, ectx->xcr0);
 }
 
 void rstore_xsave_area(const struct ext_context *ectx)
 {
-	write_xcr(0, ectx->xcr0_used);
+	write_xcr(0, ectx->xcr0_used | XCR0_SSE);
 	msr_write(MSR_IA32_XSS, ectx->xss);
 	xrstors(&ectx->xs_area, UINT64_MAX);
 	write_xcr(0, ectx->xcr0);

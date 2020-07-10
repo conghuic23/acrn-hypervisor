@@ -63,13 +63,13 @@
 /* set dsm gpa=0xDB000000, which is reserved in e820 table */
 #define GPU_DSM_GPA  			0xDB000000
 
-#define GPU_OPREGION_SIZE		0x3000
+#define GPU_OPREGION_SIZE		0x4000
 /* set opregion gpa=0xDFFFD000, which is reserved in e820 table.
  * [0xDFFFD000, 0XE0000000] 12K opregion has reserved for GVT-g,
  * because GVT-d is not compatible with GVT-g,
  * so here can use [0xDFFFD000, 0XE0000000] region.
  */
-#define GPU_OPREGION_GPA  		0xDFFFD000
+#define GPU_OPREGION_GPA  		0xDF000000
 
 extern uint64_t audio_nhlt_len;
 

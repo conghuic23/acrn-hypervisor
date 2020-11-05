@@ -38,8 +38,10 @@ static int32_t read_vmcs9900_cfg(const struct pci_vdev *vdev,
 {
 	if (vbar_access(vdev, offset)) {
 		*val = pci_vdev_read_vbar(vdev, pci_bar_index(offset));
+		pr_err("vbar access read offset=%x value=%x", offset, *val);
 	} else {
 		*val = pci_vdev_read_vcfg(vdev, offset, bytes);
+		pr_err("read offset=%x value=%x", offset, *val);
 	}
 
 	return 0;
@@ -99,12 +101,14 @@ static int32_t write_vmcs9900_cfg(struct pci_vdev *vdev, uint32_t offset,
 					uint32_t bytes, uint32_t val)
 {
 	if (vbar_access(vdev, offset)) {
+		pr_err("vbar_access write offset=%x value=%x", offset, val);
 		vpci_update_one_vbar(vdev, pci_bar_index(offset), val,
 			map_vmcs9900_vbar, unmap_vmcs9900_vbar);
 	} else if (msixcap_access(vdev, offset)) {
 		write_vmsix_cap_reg(vdev, offset, bytes, val);
 	} else {
 		pci_vdev_write_vcfg(vdev, offset, bytes, val);
+		pr_err("write offset=%x value=%x", offset, val);
 	}
 
 	return 0;
@@ -143,7 +147,7 @@ static void init_vmcs9900(struct pci_vdev *vdev)
 	msix_vbar->mask = (uint32_t) (~(msix_vbar->size - 1UL));
 	msix_vbar->fixed = (uint32_t) (msix_vbar->base_gpa & PCI_BASE_ADDRESS_MEM_MASK);
 
-	vdev->nr_bars = 2;
+	vdev->nr_bars = 6;
 
 	pci_vdev_write_vbar(vdev, MCS9900_MMIO_BAR, mmio_vbar->base_gpa);
 	pci_vdev_write_vbar(vdev, MCS9900_MSIX_BAR, msix_vbar->base_gpa);
